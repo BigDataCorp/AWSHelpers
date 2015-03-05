@@ -43,6 +43,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AWSEC2Helper.cs" />
     <Compile Include="AWSGeneralHelper.cs" />
     <Compile Include="AWSS3Helper.cs" />
     <Compile Include="AWSSQSHelper.cs" />

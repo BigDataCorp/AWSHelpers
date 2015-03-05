@@ -255,7 +255,7 @@ namespace AWSHelpers
         }
 
         /// <summary>
-        /// The method deletes the message from the queue
+        /// Deletes a single message from the queue
         /// </summary>
         public bool DeleteMessage(Message message)
         {
@@ -278,7 +278,46 @@ namespace AWSHelpers
         }
 
         /// <summary>
-        /// Inserts a message in the queue
+        /// Delete multiple messages from the queue at once 
+        /// </summary>
+        /// <param name="messages"></param>
+        /// <returns></returns>
+        public bool DeleteMessages (IList<Message> messages)
+        {
+            ClearErrorInfo ();
+
+            try
+            {
+                var request = new DeleteMessageBatchRequest
+                {
+                    QueueUrl = queueurl.QueueUrl,
+                    Entries = messages.Select (i => new DeleteMessageBatchRequestEntry (i.MessageId, i.ReceiptHandle)).ToList ()
+                };
+                var response = queue.DeleteMessageBatch (request);
+
+                if (response.Failed != null && response.Failed.Count > 0)
+                {
+                    ErrorMessage = String.Format ("ErrorCount: {0}, Messages: [{1}]", response.Failed.Count,
+                        String.Join (",", response.Failed.Select (i => i.Message).Distinct ()));
+
+                    //var retryList = messages.Where (i => response.Failed.Any (j => j.Id == i.MessageId));
+                    //foreach (var e in retryList)
+                    //    DeleteMessage (e);
+                }
+
+                return String.IsNullOrEmpty (ErrorMessage);
+            }
+            catch (Exception ex)
+            {
+                ErrorCode    = e_Exception;
+                ErrorMessage = ex.Message;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Insert a message in the queue
         /// </summary>
         public bool EnqueueMessage(string msgbody)
         {
@@ -303,7 +342,7 @@ namespace AWSHelpers
         }
 
         /// <summary>
-        /// Inserts a message in the queue and retries when an error is detected
+        /// Insert a message in the queue and retry if an error is detected
         /// </summary>
         public bool EnqueueMessage(string msgbody, int maxretries)
         {
@@ -331,7 +370,73 @@ namespace AWSHelpers
         }
 
         /// <summary>
-        /// This method checks if any messages were received by the last call of the DeQueueMessages method
+        /// Enqueues multiple messages into the opened queue at the same time
+        /// </summary>
+        public bool EnqueueMessages (IList<string> messages)
+        {
+            ClearErrorInfo ();
+
+            bool result = false;
+            try
+            {
+                var request = new SendMessageBatchRequest
+                {
+                    QueueUrl = queueurl.QueueUrl
+                };
+                List<SendMessageBatchRequestEntry> entries = new List<SendMessageBatchRequestEntry> ();
+
+                // Messages counter
+                int ix  = 0;
+
+                // Iterating until theres no message left
+                while (ix < messages.Count)
+                {
+                    entries.Clear ();
+
+                    // Storing upper limit of iteration
+                    var len = Math.Min (ix + 10, messages.Count);
+
+                    // Iterating over 10
+                    for (var i = ix; i < len; i++)
+                    {
+                        entries.Add (new SendMessageBatchRequestEntry (i.ToString (), messages[i]));
+                        ix++;
+                    }
+
+                    // Renewing entries from the object
+                    request.Entries = entries;
+
+                    // Batch Sending
+                    var response = queue.SendMessageBatch (request);
+
+                    // If any message failed to enqueue, use individual enqueue method
+                    if (response.Failed != null && response.Failed.Count > 0)
+                    {
+                        // Hiccup
+                        Thread.Sleep (100);
+
+                        foreach (var failedMessage in response.Failed)
+                        {
+                            // Individual Enqueues
+                            EnqueueMessage (failedMessage.Message);
+                        }
+                    }
+
+                }
+
+                result = true;
+            }
+            catch (Exception ex)
+            {
+                ErrorCode    = e_Exception;
+                ErrorMessage = ex.Message;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Check if any messages were received by the last call of the DeQueueMessages method
         /// </summary>
         public bool AnyMessageReceived ()
         {
@@ -356,11 +461,108 @@ namespace AWSHelpers
         }
 
         /// <summary>
-        /// This method returns an IEnumerable (that can be iterated over) collection of messages
+        /// Get an IEnumerable (that can be iterated over) collection of messages after a call to DeQueueMessages
         /// </summary>
         public IEnumerable<Message> GetDequeuedMessages ()
         {
             return rcvMessageResponse.Messages;
+        }
+
+        /// <summary>
+        /// Initiate a "message receive" loop to fetch messages from the queue, returning messages as they are fetched in IEnumerable (yeld return) format
+        /// </summary>
+        public IEnumerable<Message> GetMessages (bool throwOnError = false)
+        {
+            do
+            {
+                // Dequeueing messages from the Queue
+                if (!DeQueueMessages ())
+                {
+                    Thread.Sleep (250); // Hiccup                   
+                    continue;
+                }
+
+                // Checking for no message received, and false positives situations
+                if (!AnyMessageReceived ())
+                {
+                    break;
+                }
+
+                // Iterating over dequeued messages
+                IEnumerable<Message> messages = null;
+                try
+                {
+                    messages = GetDequeuedMessages ();
+                }
+                catch (Exception ex)
+                {
+                    ErrorCode = e_Exception;
+                    ErrorMessage = ex.Message;
+                    if (throwOnError)
+                        throw ex;
+                }
+
+                if (messages == null) continue;
+
+                foreach (Message awsMessage in messages)
+                {
+                    yield return awsMessage;
+                }
+
+            } while (true); // Loops Forever
+        }
+
+        /// <summary>
+        /// Initiate a "message receive" loop to fetch messages from the queue, returning messages as they are fetched in IEnumerable (yeld return) format, 
+        /// with an exponentially growing wait time whenever no messages are left on the queue 
+        /// </summary>
+        /// <param name="maxWaitTimeInMilliseconds">The maximum wait time for the exponentially increasing wait periods</param>
+        /// <param name="waitCallback">A callback function to be called whenever there are no messages left in the queue and a wait period is about to be initiated</param>
+        public IEnumerable<Message> GetMessagesWithWait (int maxWaitTimeInMilliseconds = 1800000, Func<int, int, bool> waitCallback = null, bool throwOnError = false)
+        {
+            int fallbackWaitTime = 1;
+
+            // start dequeue loop
+            do
+            {
+                // dequeue messages
+                foreach (var message in GetMessages (throwOnError))
+                {
+                    // Reseting fallback time
+                    fallbackWaitTime = 1;
+
+                    // process message
+                    yield return message;
+                }
+
+                // If no message was found, increases the wait time
+                int waitTime;
+                if (fallbackWaitTime <= 12)
+                {
+                    // Exponential increase on the wait time, truncated after 12 retries
+                    waitTime = Convert.ToInt32 (Math.Pow (2, fallbackWaitTime) * 1000);
+                }
+                else // Reseting Wait after 12 fallbacks
+                {
+                    waitTime = 2000;
+                    fallbackWaitTime = 0;
+                }
+
+                if (waitTime > maxWaitTimeInMilliseconds)
+                    waitTime = maxWaitTimeInMilliseconds;
+
+                fallbackWaitTime++;
+
+                // Sleeping before next try
+                //Console.WriteLine ("Fallback (seconds) => " + waitTime);
+                if (waitCallback != null)
+                {
+                    if (!waitCallback (fallbackWaitTime, waitTime))
+                        break;
+                }
+                Thread.Sleep (waitTime);
+
+            } while (true); // Loops Forever
         }
 
         /// <summary>
@@ -442,6 +644,17 @@ namespace AWSHelpers
 
                 } while (true);
             }
+        }
+
+        /// <summary>
+        /// This method calls the new "Purge" function in the API to clear a queue
+        /// </summary>
+        public void PurgeQueue ()
+        {
+            queue.PurgeQueue (new PurgeQueueRequest
+            {
+                QueueUrl = queueurl.QueueUrl
+            });
         }
     }
 }
