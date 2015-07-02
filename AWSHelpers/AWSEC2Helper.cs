@@ -17,7 +17,6 @@ namespace AWSHelpers
         public int    ErrorCode    { get; set; }   // Last error code
         public string ErrorMessage { get; set; }   // Last error message
 
-
         /// <summary>
         /// Class constructors: default (no parameters), with region endpoint, and with endpoint + credentials
         /// </summary>

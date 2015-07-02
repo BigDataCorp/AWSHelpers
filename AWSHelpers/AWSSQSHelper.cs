@@ -1,15 +1,4 @@
-﻿/*
-%     *
-%COPYRIGHT* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *%
-%                                                                          %
-% AWS Class Helpers                                                        %
-%                                                                          %
-% Copyright (c) 2011-2014 Big Data Corporation ©                           %
-%                                                                          %
-%COPYRIGHT* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *%
-      *
-*/
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
