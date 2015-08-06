@@ -17,46 +17,36 @@ namespace AWSHelpers
         public int    ErrorCode    { get; set; }   // Last error code
         public string ErrorMessage { get; set; }   // Last error message
 
+
         /// <summary>
         /// Class constructors: default (no parameters), with region endpoint, and with endpoint + credentials
         /// </summary>
         public AWSEC2Helper ()
-        {
-            // Set configuration info
-            AmazonEC2Config config = new AmazonEC2Config ();
-            config.Timeout          = new TimeSpan (1, 0, 0);
-            config.ReadWriteTimeout = new TimeSpan (1, 0, 0);
-            config.RegionEndpoint   = RegionEndpoint.USEast1;
-
-            // Create EC2 client
-            EC2client = AWSClientFactory.CreateAmazonEC2Client (
-                            Gadgets.LoadConfigurationSetting ("AWSAccessKey", ""),
-                            Gadgets.LoadConfigurationSetting ("AWSSecretKey", ""),
-                            config);
+        {            
+            Initialize (RegionEndpoint.USEast1,
+                        Gadgets.LoadConfigurationSetting ("AWSAccessKey", ""),
+                        Gadgets.LoadConfigurationSetting ("AWSSecretKey", ""));
         }
 
         public AWSEC2Helper (RegionEndpoint regionEndpoint)
         {
-            // Set configuration info
-            AmazonEC2Config config = new AmazonEC2Config ();
-            config.Timeout          = new TimeSpan (1, 0, 0);
-            config.ReadWriteTimeout = new TimeSpan (1, 0, 0);
-            config.RegionEndpoint   = regionEndpoint;
-
-            // Create EC2 client
-            EC2client = AWSClientFactory.CreateAmazonEC2Client (
-                            Gadgets.LoadConfigurationSetting ("AWSAccessKey", ""),
-                            Gadgets.LoadConfigurationSetting ("AWSSecretKey", ""),
-                            config);
+            Initialize (regionEndpoint,
+                        Gadgets.LoadConfigurationSetting ("AWSAccessKey", ""),
+                        Gadgets.LoadConfigurationSetting ("AWSSecretKey", ""));
         }
 
         public AWSEC2Helper (RegionEndpoint regionEndpoint, string AWSAcessKey, string AWSSecretKey)
         {
+            Initialize (regionEndpoint, AWSAcessKey, AWSSecretKey);
+        }
+
+        private void Initialize (RegionEndpoint regionEndpoint, string AWSAcessKey, string AWSSecretKey)
+        {
             // Set configuration info
             AmazonEC2Config config = new AmazonEC2Config ();
-            config.Timeout          = new TimeSpan (1, 0, 0);
+            config.Timeout = new TimeSpan (1, 0, 0);
             config.ReadWriteTimeout = new TimeSpan (1, 0, 0);
-            config.RegionEndpoint   = regionEndpoint;
+            config.RegionEndpoint = regionEndpoint;
 
             // Create EC2 client
             EC2client = AWSClientFactory.CreateAmazonEC2Client (
@@ -185,7 +175,6 @@ namespace AWSHelpers
                 MinCount          = InstanceCount,
                 MaxCount          = InstanceCount,
                 KeyName           = KeyPairName,
-                SecurityGroupIds  = SecurityGroups,
                 NetworkInterfaces = NetworkInterfaces,
                 UserData          = Gadgets.Base64Encode (UserData)
             };

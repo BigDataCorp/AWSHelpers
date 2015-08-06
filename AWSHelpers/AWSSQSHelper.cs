@@ -1,4 +1,15 @@
-﻿using System;
+﻿/*
+%     *
+%COPYRIGHT* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *%
+%                                                                          %
+% AWS Class Helpers                                                        %
+%                                                                          %
+% Copyright (c) 2011-2014 Big Data Corporation ©                           %
+%                                                                          %
+%COPYRIGHT* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *%
+      *
+*/
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -32,9 +43,30 @@ namespace AWSHelpers
 
         public const int AmazonSQSMaxMessageSize = 256 * 1024;                  // AMAZON queue max message size
 
+        public string AWSAccessKey;                         
+        public string AWSSecretKey;                         
+
+
         ///////////////////////////////////////////////////////////////////////
         //                    Methods & Functions                            //
         ///////////////////////////////////////////////////////////////////////
+
+
+
+        /// <summary>
+        /// This method initializes the client in order to avoid writing AWS AccessKey and SecretKey for testing zith XUnit
+        /// </summary>
+        /// <param name="regionEndpoint"></param>
+        /// <param name="AWSAcessKey"></param>
+        /// <param name="AWSSecretKey"></param>
+        //private void Initialize (RegionEndpoint regionEndpoint, string AWSAcessKey, string AWSSecretKey)
+        //{
+        //    // Create SQS client
+        //    IAmazonSQS queueClient = AWSClientFactory.CreateAmazonSQSClient (
+        //                    AWSAcessKey,
+        //                    AWSSecretKey,
+        //                    regionEndpoint);
+        //}
 
         /// <summary>
         /// This static method creates an SQS queue to be used later. For parameter definitions beyond error message, 
@@ -44,7 +76,9 @@ namespace AWSHelpers
         /// <param name="RegionEndpoint">Endpoint corresponding to the AWS region where the queue should be created</param>
         /// <param name="ErrorMessage">String that will receive the error message, if an error occurs</param>
         /// <returns>Boolean indicating if the queue was created</returns>        
-        public static bool CreateSQSQueue (string QueueName, RegionEndpoint RegionEndpoint, out string ErrorMessage, int DelaySeconds = 0, int MaximumMessageSize = AmazonSQSMaxMessageSize, int MessageRetentionPeriod = 345600, int ReceiveMessageWaitTimeSeconds = 0, int VisibilityTimeout = 30, string Policy = "")
+        public static bool CreateSQSQueue (string QueueName, RegionEndpoint RegionEndpoint, out string ErrorMessage, int DelaySeconds = 0, int MaximumMessageSize = AmazonSQSMaxMessageSize, 
+                                           int MessageRetentionPeriod = 345600, int ReceiveMessageWaitTimeSeconds = 0, int VisibilityTimeout = 30, string Policy = "",
+                                           string AWSAccessKey = "", string AWSSecretKey = "")
         {
             bool result = false;
             ErrorMessage = "";
@@ -58,7 +92,16 @@ namespace AWSHelpers
 
             if (!String.IsNullOrWhiteSpace (QueueName))
             {
-                IAmazonSQS queueClient = AWSClientFactory.CreateAmazonSQSClient (RegionEndpoint);
+                IAmazonSQS queueClient;
+
+                if (!String.IsNullOrEmpty(AWSAccessKey))
+                {
+                    queueClient = AWSClientFactory.CreateAmazonSQSClient (AWSAccessKey, AWSSecretKey, RegionEndpoint);
+                }
+                else
+                {
+                    queueClient = AWSClientFactory.CreateAmazonSQSClient (RegionEndpoint);
+                }
                 try
                 {
                     // Generate the queue creation request
@@ -103,15 +146,23 @@ namespace AWSHelpers
         /// <param name="RegionEndpoint">Endpoint corresponding to the AWS region where the queue is located</param>
         /// <param name="ErrorMessage">String that will receive the error message, if an error occurs</param>
         /// <returns></returns>
-        public static bool DestroySQSQueue (string QueueName, RegionEndpoint RegionEndpoint, out string ErrorMessage)
+        public static bool DestroySQSQueue (string QueueName, RegionEndpoint RegionEndpoint, out string ErrorMessage, string AWSAccessKey = "", string AWSSecretKey = "")
         {
             bool result = false;
             ErrorMessage = "";
+            IAmazonSQS queueClient;
+
 
             if (!String.IsNullOrWhiteSpace (QueueName))
             {
-                IAmazonSQS queueClient = AWSClientFactory.CreateAmazonSQSClient (RegionEndpoint); 
-                
+                if (!String.IsNullOrEmpty (AWSAccessKey))
+                {
+                    queueClient = AWSClientFactory.CreateAmazonSQSClient (AWSAccessKey, AWSSecretKey, RegionEndpoint);
+                }
+                else
+                {
+                    queueClient = AWSClientFactory.CreateAmazonSQSClient (RegionEndpoint);
+                }
                 try
                 {
                     // Load the queue URL
@@ -142,9 +193,9 @@ namespace AWSHelpers
         /// <param name="queueName">The name of the queue to be opened when we create the class</param>
         /// <param name="maxNumberOfMessages">The maximum number of messages that will be received upon a GET request</param>
         /// <param name="regionEndpoint">Endpoint corresponding to the AWS region where the queue we want to open resides</param>
-        public AWSSQSHelper(string queueName, int maxNumberOfMessages, RegionEndpoint regionEndpoint)
+        public AWSSQSHelper (string queueName, int maxNumberOfMessages, RegionEndpoint regionEndpoint, String AWSAccessKey="", String AWSSecretKey="")
         {
-            OpenQueue(queueName, maxNumberOfMessages, regionEndpoint);
+            OpenQueue(queueName, maxNumberOfMessages, regionEndpoint,AWSAccessKey,AWSSecretKey);
         }
 
         /// <summary>
@@ -159,7 +210,7 @@ namespace AWSHelpers
         /// <summary>
         /// The method opens the queue
         /// </summary>
-        public bool OpenQueue(string queuename, int maxnumberofmessages, RegionEndpoint regionendpoint)
+        public bool OpenQueue(string queuename, int maxnumberofmessages, RegionEndpoint regionendpoint,String AWSAccessKey="", String AWSSecretKey="")
         {
             ClearErrorInfo();
 
@@ -167,7 +218,14 @@ namespace AWSHelpers
 
             if (!string.IsNullOrWhiteSpace(queuename))
             {
-                queue = AWSClientFactory.CreateAmazonSQSClient(regionendpoint);
+                if (!String.IsNullOrEmpty (AWSAccessKey))
+                {
+                    queue = AWSClientFactory.CreateAmazonSQSClient (AWSAccessKey, AWSSecretKey,regionendpoint);
+                }
+                else
+                {
+                    queue = AWSClientFactory.CreateAmazonSQSClient (regionendpoint);
+                }
                 try
                 {
                     // Get queue url
