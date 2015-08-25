@@ -156,7 +156,7 @@ namespace AWSHelpers
             ErrorMessage = "";
 
             // Create the list with security groups
-            List<string> SecurityGroups = new List<string> () { SecurityGroupId };
+            List<string> SecurityGroups = new List<string> () { SecurityGroupId }; 
 
             // Create the network interface object (to connect with the VPC)
             var NetworkInterface = new InstanceNetworkInterfaceSpecification ()
@@ -320,14 +320,12 @@ namespace AWSHelpers
             };
             List<InstanceNetworkInterfaceSpecification> NetworkInterfaces = new List<InstanceNetworkInterfaceSpecification> () { NetworkInterface };
 
-            // Create the launch specification
             LaunchSpecification launchSpecification = new LaunchSpecification ()
             {
                 ImageId           = AMI_ID,
                 InstanceType      = InstanceType,
                 KeyName           = KeyPairName,
                 SecurityGroups    = SecurityGroups,
-                NetworkInterfaces = NetworkInterfaces,
                 UserData          = Gadgets.Base64Encode (UserData)
             };
 
