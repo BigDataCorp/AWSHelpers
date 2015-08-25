@@ -569,5 +569,20 @@ namespace AWSHelpers
                 timestamp          = t.Timestamp
             }).ToList();
         }
+
+        /// <summary>
+        /// Creates tag specified by the second parameter
+        /// into the list of resources received
+        /// </summary>
+        /// <param name="resources">InstanceIds, SpotRequestIds...</param>
+        /// <param name="tags">Tags in the form of "Key + Value"</param>
+        public void CreateTags(List<String> resources, List<KeyValuePair<String,String>> tags)
+        {
+            var response = EC2client.CreateTags (new CreateTagsRequest ()
+                {
+                    Resources = resources,
+                    Tags      = tags.Select(t => new Tag() { Key = t.Key, Value = t.Value}).ToList()
+                });
+        }
     }
 }
