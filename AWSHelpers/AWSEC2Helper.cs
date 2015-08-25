@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Amazon;
 using Amazon.EC2;
 using Amazon.EC2.Model;
+using AWSHelpers.Models;
 
 namespace AWSHelpers
 {
@@ -539,6 +540,34 @@ namespace AWSHelpers
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Retrieves a list of prices for the instance type received,
+        /// respecting the history size parameter.
+        /// </summary>
+        /// <param name="instanceTypes">Type (T2.Medium, C4.XLarge...)</param>
+        /// <param name="historySize">Number of prices</param>
+        /// <returns>List of object containing Price, Timestamp and Description</returns>
+        public List<EC2SpotPrice> GetSpotRequestPrices (String instanceType, String AZ, String productDescription = null, int historySize = 1)
+        {
+            // Building Requests
+            var spotPriceRequest                 = new DescribeSpotPriceHistoryRequest ();
+            spotPriceRequest.MaxResults          = historySize;
+            spotPriceRequest.InstanceTypes       = new List<String>(){instanceType};
+            spotPriceRequest.AvailabilityZone    = AZ;
+            spotPriceRequest.ProductDescriptions = new List<String>(){productDescription};
+
+            // Retrieving Spot Prices
+            var response = EC2client.DescribeSpotPriceHistory (spotPriceRequest);
+
+            //response.SpotPriceHistory.Select(t => t.ProductDescription.;
+            return response.SpotPriceHistory.Select (t => new EC2SpotPrice ()
+            {
+                price              = float.Parse(t.Price),
+                productDescription = t.ProductDescription.Value.Replace(".", ","),
+                timestamp          = t.Timestamp
+            }).ToList();
         }
     }
 }
