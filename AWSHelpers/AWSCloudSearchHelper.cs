@@ -106,6 +106,8 @@ namespace AWSHelpers
         public int    ErrorCode    { get; set; }   // Last error code
         public string ErrorMessage { get; set; }   // Last error message
 
+        public SearchResponse LastSearchResults { get; set; }  // Last search results
+
         /// <summary>
         /// Class constructors: default (no parameters), with region endpoint, with endpoint + credentials and with endpoint + credentials + service endpoint
         /// </summary>
@@ -203,6 +205,7 @@ namespace AWSHelpers
         /// </summary>
         private void ClearSearchResults ()
         {
+            LastSearchResults = null;
         }
 
         /// <summary>
@@ -238,7 +241,20 @@ namespace AWSHelpers
             return ErrorCode == 0;
         }
 
-        public bool RunDocumentSearch (string searchQuery, string filterQuery = "", string cursor = "", string parser = "simple", int size = 10, List<AWSCloudSearchExpressionDefinition> expressions = null, List<AWSCloudSearchFacetFieldDefinition> facets = null, List<string> returnFields = null)
+        /// <summary>
+        /// This method runs a search query on your cloudsearch domain
+        /// Ref: http://docs.aws.amazon.com/cloudsearch/latest/developerguide/search-api.html#search-request-parameters
+        /// </summary>
+        /// <param name="searchQuery">The search query parameters</param>
+        /// <param name="filterQuery">The filter query (fq) parameters</param>
+        /// <param name="cursor">Cursor to paginate results</param>
+        /// <param name="parser">The type of parser to be used. "simple" and "structured" are the most common</param>
+        /// <param name="size">The size of the result set to be returned</param>
+        /// <param name="expressions">A list of expressions to be calculated and returned with the results</param>
+        /// <param name="facets">The "facets" parameter (for data grouping)</param>
+        /// <param name="returnFields">List of fields to be returned. By default, all return-enabled fields are returned.</param>
+        /// <returns></returns>
+        public bool RunDocumentSearch (string searchQuery, string filterQuery = "", string cursor = "", string parser = "simple", int start = 0, int size = 10, List<AWSCloudSearchExpressionDefinition> expressions = null, List<AWSCloudSearchFacetFieldDefinition> facets = null, List<string> returnFields = null)
         {
             ClearErrorInfo ();
             ClearSearchResults ();
@@ -248,7 +264,7 @@ namespace AWSHelpers
                 SearchRequest searchRequest = new SearchRequest ();
                 searchRequest.Query         = searchQuery;
                 searchRequest.QueryParser   = parser;
-                searchRequest.Size          = size;                
+                searchRequest.Size          = size;                                
 
                 // Add the parameters as long as they've been 
                 if (!String.IsNullOrEmpty (filterQuery))
@@ -260,32 +276,44 @@ namespace AWSHelpers
                 {
                     searchRequest.Cursor = cursor;
                 }
+                else
+                {
+                    searchRequest.Start = start;
+                }
 
                 if (expressions != null && expressions.Count > 0)
                 {
+                    searchRequest.Expr = "{";
+
                     foreach (AWSCloudSearchExpressionDefinition expr in expressions)
                     {
-                        searchRequest.Expr += "expr." + expr.ExpressionName + "=" + expr.ExpressionValue + "&";
+                        searchRequest.Expr += "'" + expr.ExpressionName + "':'" + expr.ExpressionValue + "',";
                     }
-                    searchRequest.Expr = searchRequest.Expr.TrimEnd ('&');                    
+                    searchRequest.Expr = searchRequest.Expr.TrimEnd (',');
+
+                    searchRequest.Expr += "}";
                 }
 
                 if (facets != null && facets.Count > 0)
                 {
+                    searchRequest.Facet = "{";
+
                     foreach (AWSCloudSearchFacetFieldDefinition facet in facets)
                     {
-                        searchRequest.Facet += "facet." + facet.FieldName + "={";
+                        searchRequest.Facet += "'" + facet.FieldName + "':{";
                         if (facet.buckets.Count > 0)
                         {
-                            searchRequest.Facet += "buckets:['" + String.Join ("','", facet.buckets) + "']}";
+                            searchRequest.Facet += "buckets:['" + String.Join ("','", facet.buckets) + "']";
                         }
-                        else
+                        else if (!String.IsNullOrEmpty (facet.sort)) 
                         {
-                            searchRequest.Facet += "sort:'" + facet.sort + "', size:" + facet.size + "}";
+                            searchRequest.Facet += "sort:'" + facet.sort + "', size:" + facet.size;
                         }
-                        searchRequest.Facet += "&";
+                        searchRequest.Facet += "},";
                     }
-                    searchRequest.Facet = searchRequest.Facet.TrimEnd ('&');
+                    searchRequest.Facet = searchRequest.Facet.TrimEnd (',');
+
+                    searchRequest.Facet += "}";
                 }
 
                 if (returnFields != null && returnFields.Count > 0)
@@ -303,6 +331,7 @@ namespace AWSHelpers
                 else
                 {
                     // Save the response on our objects
+                    this.LastSearchResults = searchResponse;
                 }
             }
             catch (Exception ex)
