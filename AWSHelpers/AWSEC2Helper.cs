@@ -8,6 +8,7 @@ using Amazon;
 using Amazon.EC2;
 using Amazon.EC2.Model;
 using AWSHelpers.Models;
+using System.Globalization;
 
 namespace AWSHelpers
 {
@@ -325,16 +326,16 @@ namespace AWSHelpers
                 ImageId           = AMI_ID,
                 InstanceType      = InstanceType,
                 KeyName           = KeyPairName,
-                SecurityGroups    = SecurityGroups,
+                NetworkInterfaces = NetworkInterfaces,
                 UserData          = Gadgets.Base64Encode (UserData)
             };
 
             // Create the request object        
             RequestSpotInstancesRequest spotRequest = new RequestSpotInstancesRequest ()
             {
-                SpotPrice           = InstancePrice.ToString (),
+                SpotPrice           = InstancePrice.ToString(CultureInfo.InvariantCulture),
                 InstanceCount       = InstanceCount,
-                LaunchSpecification = launchSpecification                
+                LaunchSpecification = launchSpecification,
             };
             
 
@@ -566,6 +567,16 @@ namespace AWSHelpers
                 productDescription = t.ProductDescription.Value.Replace(".", ","),
                 timestamp          = t.Timestamp
             }).ToList();
+        }
+
+        /// <summary>
+        /// Terminates an instance based on the SpotRequest ID received
+        /// </summary>
+        /// <param name="spotRequestId">Id of the spot request</param>
+        public void TerminateInstanceFromSpotRequest(string spotRequestId)
+        {
+            string instanceId = GetInstanceIdForSpotRequest (spotRequestId);
+            TerminateInstance (instanceId);
         }
 
         /// <summary>
