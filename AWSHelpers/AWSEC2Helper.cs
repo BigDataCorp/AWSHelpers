@@ -405,7 +405,7 @@ namespace AWSHelpers
             catch (Exception ex)
             {
                 ErrorCode    = -1;
-                ErrorMessage = ex.Message + "::" + ex.InnerException;
+                ErrorMessage = ex.Message;
             }
 
             return result;
