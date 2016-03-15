@@ -593,5 +593,35 @@ namespace AWSHelpers
                     Tags      = tags.Select(t => new Tag() { Key = t.Key, Value = t.Value}).ToList()
                 });
         }
+
+        /// <summary>
+        /// Gets the instances-ids of all the EC2 instances
+        /// that are 'running' based on the AMIID Received
+        /// </summary>
+        /// <param name="amiID">AMI-ID used as filter for finding the instances (E.g: ami-499ad223)</param>
+        /// <returns>List of the instance-ids that matched the filter and are still running</returns>
+        public List<String> GetInstanceIdsForAMI (string amiID)
+        {
+            // AWS SDK Request to describe instances
+            DescribeInstancesRequest req = new DescribeInstancesRequest ();            
+            var response                 = EC2client.DescribeInstances (req);
+
+            List<String> instanceIdsFound = new List<String> ();
+
+            // Iterating over instances found 
+            foreach (var instanceDescription in response.Reservations)
+            {
+                foreach (var instance in instanceDescription.Instances)
+                {
+                    // Checking for filter match
+                    if (instance.ImageId == amiID && instance.State.Name.Value == "running")
+                    {   
+                        instanceIdsFound.Add (instance.InstanceId);
+                    }
+                }
+            }
+
+            return instanceIdsFound;
+        }
     }
 }
