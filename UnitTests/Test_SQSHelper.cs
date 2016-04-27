@@ -17,7 +17,7 @@ namespace UnitTests
         public static RegionEndpoint regionEndPoint = AWSGeneralHelper.GetRegionEndpoint ();
         public static String ErrorMessage = "Fail to destroy the queue";
 
-        // // TODO: Put your own Keys
+        // TODO: Put your own Keys
         public static String myAccessKey = "";
         public static String mySecretKey = "";
 
@@ -64,6 +64,7 @@ namespace UnitTests
 
             // Accessing the Queue
             AWSSQSHelper queueTestAWSSQS = new AWSSQSHelper (queueName, 2, regionEndPoint, myAccessKey, mySecretKey);
+            
 
             // Adding msgs
             Assert.True (queueTestAWSSQS.EnqueueMessage (msgbody));

@@ -596,11 +596,11 @@ namespace AWSHelpers
 
         /// <summary>
         /// Gets the instances-ids of all the EC2 instances
-        /// that are 'running' based on the AMIID Received
+        /// that are 'running' based on the AMIIDs Received
         /// </summary>
-        /// <param name="amiID">AMI-ID used as filter for finding the instances (E.g: ami-499ad223)</param>
+        /// <param name="amiID">List of AMI-IDs used as filter for finding the instances (E.g: ami-499ad223)</param>
         /// <returns>List of the instance-ids that matched the filter and are still running</returns>
-        public List<String> GetInstanceIdsForAMI (string amiID)
+        public List<String> GetInstanceIdsForAMI (List<String> amiIDs)
         {
             // AWS SDK Request to describe instances
             DescribeInstancesRequest req = new DescribeInstancesRequest ();            
@@ -614,7 +614,7 @@ namespace AWSHelpers
                 foreach (var instance in instanceDescription.Instances)
                 {
                     // Checking for filter match
-                    if (instance.ImageId == amiID && instance.State.Name.Value == "running")
+                    if (amiIDs.Contains(instance.ImageId) && instance.State.Name.Value == "running")
                     {   
                         instanceIdsFound.Add (instance.InstanceId);
                     }
