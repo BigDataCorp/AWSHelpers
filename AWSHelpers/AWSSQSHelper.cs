@@ -281,6 +281,34 @@ namespace AWSHelpers
         }
 
         /// <summary>
+        /// Returns the approximate number of messages related to the queue (queued messages, messages not visible and messages pending to be added to the queue)
+        /// </summary>
+        public int ApproximateTotalNumberOfMessages()
+        {
+            ClearErrorInfo();
+
+            int result = 0;
+            try
+            {
+                GetQueueAttributesRequest attrreq = new GetQueueAttributesRequest();
+                attrreq.QueueUrl = queueurl.QueueUrl;
+                attrreq.AttributeNames.Add("ApproximateNumberOfMessages");
+                attrreq.AttributeNames.Add("ApproximateNumberOfMessagesNotVisible");
+                attrreq.AttributeNames.Add("ApproximateNumberOfMessagesDelayed");
+                GetQueueAttributesResponse attrresp = queue.GetQueueAttributes(attrreq);
+                if (attrresp != null)
+                    result = attrresp.ApproximateNumberOfMessages + attrresp.ApproximateNumberOfMessagesNotVisible + attrresp.ApproximateNumberOfMessagesDelayed;
+            }
+            catch (Exception ex)
+            {
+                ErrorCode = e_Exception;
+                ErrorMessage = ex.Message;
+            }
+
+            return result;
+        }
+
+        /// <summary>
         /// The method loads a one or more messages from the queue
         /// </summary>
         public bool DeQueueMessages()
