@@ -73,6 +73,15 @@ namespace AWSHelpers
             EC2client = null;
         }
 
+        public void AssociateElasticIP (string instanceId, string publicIp)
+        {
+            // Initializing request
+            AssociateAddressRequest associateRequest = new AssociateAddressRequest (instanceId, publicIp);
+
+            // Associating address & fetching response
+            EC2client.AssociateAddress (associateRequest);
+        }
+
         /// <summary>
         /// This function creates a set of instances into EC2 Classic. It returns the Ids of the created instances if successful, or 
         /// sets the error code and message otherwise
