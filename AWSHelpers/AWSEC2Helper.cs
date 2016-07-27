@@ -73,10 +73,22 @@ namespace AWSHelpers
             EC2client = null;
         }
 
-        public void AssociateElasticIP (string instanceId, string publicIp)
+        /// <summary>
+        /// Associates an elastic IP to an EC2 instance.
+        /// </summary>
+        /// <remarks>
+        ///     If the instance being associated to the elastic IP is inside a VPC, the "allocationId" is required.
+        /// </remarks>
+        /// <param name="instanceId">ID of the instance to be associated to the Elastic IP</param>
+        /// <param name="publicIp">The Elastic IP</param>
+        /// <param name="allocationId">Required for EC2-VPC</param>
+        public void AssociateElasticIP (string instanceId, string publicIp, string allocationId = "")
         {
             // Initializing request
-            AssociateAddressRequest associateRequest = new AssociateAddressRequest (instanceId, publicIp);
+            AssociateAddressRequest associateRequest = new AssociateAddressRequest ();
+            associateRequest.InstanceId     = instanceId;
+            associateRequest.PublicIp       = publicIp;
+            associateRequest.AllocationId   = allocationId;
 
             // Associating address & fetching response
             EC2client.AssociateAddress (associateRequest);
