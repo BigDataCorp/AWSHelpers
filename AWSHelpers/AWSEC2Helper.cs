@@ -74,21 +74,32 @@ namespace AWSHelpers
         }
 
         /// <summary>
-        /// Associates an elastic IP to an EC2 instance.
+        /// This function associates an elastic IP to an EC2-Classic instance.
         /// </summary>
-        /// <remarks>
-        ///     If the instance being associated to the elastic IP is inside a VPC, the "allocationId" is required.
-        /// </remarks>
-        /// <param name="instanceId">ID of the instance to be associated to the Elastic IP</param>
-        /// <param name="publicIp">The Elastic IP</param>
-        /// <param name="allocationId">Required for EC2-VPC</param>
-        public void AssociateElasticIP (string instanceId, string publicIp, string allocationId = "")
+        /// <param name="InstanceId">The ID of the instance to be associated to the elastic IP</param>
+        /// <param name="PublicId">The public ip ("Elastic IP" column in the AWS console)</param>
+        public void AssociateElasticIpToClassicInstance (string InstanceId, string PublicId)
         {
             // Initializing request
             AssociateAddressRequest associateRequest = new AssociateAddressRequest ();
-            associateRequest.InstanceId     = instanceId;
-            associateRequest.PublicIp       = publicIp;
-            associateRequest.AllocationId   = allocationId;
+            associateRequest.InstanceId     = InstanceId;
+            associateRequest.PublicIp       = PublicId;
+
+            // Associating address & fetching response
+            EC2client.AssociateAddress (associateRequest);
+        }
+
+        /// <summary>
+        /// This function associates an elastic IP to an EC2-VPC instance.
+        /// </summary>
+        /// <param name="InstanceId">The ID of the instance to be associated to the elastic IP</param>
+        /// <param name="AllocationId">The allocation id ("Allocation ID" column in the AWS console)</param>
+        public void AssociateElasticIpToVpcInstance (string InstanceId, string AllocationId)
+        {
+            // Initializing request
+            AssociateAddressRequest associateRequest = new AssociateAddressRequest ();
+            associateRequest.InstanceId     = InstanceId;
+            associateRequest.AllocationId   = AllocationId;
 
             // Associating address & fetching response
             EC2client.AssociateAddress (associateRequest);
