@@ -265,16 +265,14 @@ namespace AWSHelpers
                 searchRequest.Query         = searchQuery;
                 searchRequest.QueryParser   = parser;
                 searchRequest.Size          = size;
-                searchRequest.QueryOptions  = queryOptions;
-                searchRequest.Sort          = sort;
 
-                // Add the parameters as long as they've been 
-                if (!String.IsNullOrEmpty (filterQuery))
+                // Add the parameters as long as they're not null or whitespace
+                if (!String.IsNullOrWhiteSpace (filterQuery))
                 {
                     searchRequest.FilterQuery = filterQuery;
                 }
 
-                if (!String.IsNullOrEmpty (cursor))
+                if (!String.IsNullOrWhiteSpace(cursor))
                 {
                     searchRequest.Cursor = cursor;
                 }
@@ -323,7 +321,18 @@ namespace AWSHelpers
                     searchRequest.Return = String.Join (",", returnFields);
                 }
 
+                if (!String.IsNullOrWhiteSpace(queryOptions))
+                {
+                    searchRequest.QueryOptions = queryOptions;
+                }
+
+                if (!String.IsNullOrWhiteSpace(sort))
+                {
+                    searchRequest.Sort = sort;
+                }
+
                 SearchResponse searchResponse = CloudSearchClient.Search (searchRequest);
+
                 // Check response for errors
                 if (searchResponse.HttpStatusCode != HttpStatusCode.OK)
                 {
