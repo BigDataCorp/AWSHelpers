@@ -603,15 +603,25 @@ namespace AWSHelpers
         }
 
         /// <summary>
-        /// The method returns a list with all data items stored in the bucket "bucketname"
+        /// Populates a given list with the keys of all objects stored in the bucket "bucketname"
         /// </summary>
-        public void ListDataItems(string bucketname, List<string> dataitems, ProgressNotify pNotify, int maxitems = 0)
+        /// <param name="bucketname"></param>
+        /// <param name="dataitems">The list to be populated with object keys</param>
+        /// <param name="pNotify"></param>
+        /// <param name="maxitems">Soft limit for the number of keys added to the list</param>
+        /// <param name="prefix">This is used as a prefix for the LIST requests.</param>
+        public void ListDataItems(string bucketname, List<string> dataitems, ProgressNotify pNotify, int maxitems = 0, string prefix = "")
         {
             try
             {
                 ListObjectsResponse response;
                 ListObjectsRequest request = new ListObjectsRequest();
                 request.BucketName = bucketname;
+
+                if (!String.IsNullOrWhiteSpace(prefix))
+                {
+                    request.Prefix = prefix;
+                }
 
                 if (maxitems == 0)
                     maxitems = int.MaxValue;
@@ -653,15 +663,26 @@ namespace AWSHelpers
         }
 
         /// <summary>
-        /// The method returns a list with all data items stored in the bucket "bucketname"
+        /// Populates a given list with the keys of all objects stored in the bucket "bucketname"
         /// </summary>
-        public void ListDataItems(string bucketname, List<string> dataitems, string mask, ProgressNotify pNotify, int maxitems = 0)
+        /// <param name="bucketname"></param>
+        /// <param name="dataitems">The list to be populated with object keys</param>
+        /// <param name="mask">A string for filtering which keys are added to the list. If this is a substring (not necessarily a prefix) of an object key, it is added to the list.</param>
+        /// <param name="pNotify"></param>
+        /// <param name="maxitems">Soft limit for the number of keys added to the list</param>
+        /// <param name="prefix">This is used as a prefix for the LIST requests.</param>
+        public void ListDataItems(string bucketname, List<string> dataitems, string mask, ProgressNotify pNotify, int maxitems = 0, string prefix = "")
         {
             try
             {
                 ListObjectsResponse response;
                 ListObjectsRequest request = new ListObjectsRequest();
                 request.BucketName = bucketname;
+
+                if (!String.IsNullOrWhiteSpace(prefix))
+                {
+                    request.Prefix = prefix;
+                }
 
                 if (maxitems == 0)
                     maxitems = int.MaxValue;
@@ -702,6 +723,92 @@ namespace AWSHelpers
             {
                 ErrorCode = -1;
                 ErrorMessage = ex.Message;
+            }
+        }
+
+        /// <summary>
+        /// Returns S3 objects in bucket "bucketName", according to given parameters
+        /// </summary>
+        /// <param name="bucketName"></param>
+        /// <param name="maxItems">Soft limit for the number of keys added to the list</param>
+        /// <param name="prefix">This is used as a prefix for the LIST requests.</param>
+        /// <param name="mask">A string for filtering which objects are returned. If this is a substring (not necessarily a prefix) of an object key, it is returned.</param>
+        /// <param name="pNotify"></param>
+        /// <returns></returns>
+        public IEnumerable<S3Object> ListObjects(string bucketName, long maxItems = 0, string prefix = "", string mask = "")
+        {
+            ListObjectsResponse response;
+            ListObjectsRequest request = new ListObjectsRequest();
+            request.BucketName = bucketName;
+
+            if (!String.IsNullOrWhiteSpace(prefix))
+            {
+                request.Prefix = prefix;
+            }
+
+            if (maxItems == 0)
+                maxItems = long.MaxValue;
+
+            long count = 0;
+            while (true)
+            {
+                // Get the partial list
+                try
+                {
+                    response = S3client.ListObjects(request);
+                }
+                catch (Exception ex)
+                {
+                    ErrorCode = -1;
+                    ErrorMessage = ex.Message;
+                    yield break;
+                }
+
+                // Process response
+                foreach (S3Object entry in response.S3Objects)
+                {
+                    if (entry.Key.IndexOf(mask, StringComparison.OrdinalIgnoreCase) > -1)
+                    {
+                        yield return entry;
+                        count++;
+                    }
+                }
+
+                // If response is truncated, set the marker to get the next set of keys
+                if (response.IsTruncated)
+                    request.Marker = response.NextMarker;
+                else
+                    break;
+
+                // Limit reached
+                if (count >= maxItems)
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Returns the list of all S3 buckets
+        /// </summary>
+        public List<S3Bucket> ListBuckets ()
+        {
+            try
+            {
+                List<S3Bucket> ret = new List<S3Bucket>();
+
+                // Get the partial list
+                ListBucketsResponse response = S3client.ListBuckets();
+
+                // Process response
+                foreach (S3Bucket entry in response.Buckets)
+                    ret.Add(entry);
+
+                return ret;
+            }
+            catch (Exception ex)
+            {
+                ErrorCode = -1;
+                ErrorMessage = ex.Message;
+                return null;
             }
         }
     }
