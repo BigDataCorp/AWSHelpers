@@ -735,7 +735,7 @@ namespace AWSHelpers
         /// <param name="mask">A string for filtering which objects are returned. If this is a substring (not necessarily a prefix) of an object key, it is returned.</param>
         /// <param name="pNotify"></param>
         /// <returns></returns>
-        public IEnumerable<S3Object> ListObjects(string bucketName, long maxItems = 0, string prefix = "", string mask = "")
+        public IEnumerable<S3Object> ListObjects(string bucketName, string marker = "", long maxItems = 0, string prefix = "", string mask = "")
         {
             ListObjectsResponse response;
             ListObjectsRequest request = new ListObjectsRequest();
@@ -748,6 +748,11 @@ namespace AWSHelpers
 
             if (maxItems == 0)
                 maxItems = long.MaxValue;
+
+            if (!String.IsNullOrWhiteSpace(marker))
+            {
+                request.Marker = marker;
+            }
 
             long count = 0;
             while (true)
