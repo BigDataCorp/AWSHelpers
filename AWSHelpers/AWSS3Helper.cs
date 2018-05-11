@@ -494,9 +494,9 @@ namespace AWSHelpers
         }
 
         /// <summary>
-        /// Transfers a file to S3. This method uses the "TransferUtility" class in order to upload the file to S3
+        /// Uploads a file to S3. This method uses the "TransferUtility" class in order to upload the file.
         /// </summary>
-        public bool FileUpload(string bucketname, string dataname, string filepath)
+        public bool FileUpload(string bucketname, string dataname, string filepath, S3StorageClass storageClass)
         {
             // Reset error info
             ClearErrorInfo();
@@ -508,7 +508,7 @@ namespace AWSHelpers
                 {
                     BucketName      = bucketname,
                     FilePath        = filepath,
-                    StorageClass    = S3StorageClass.ReducedRedundancy,
+                    StorageClass    = storageClass,
                     PartSize        = 6291456, // 6 MB.
                     Key             = dataname,
                     ContentType     = "binary/octet-stream",
@@ -523,6 +523,14 @@ namespace AWSHelpers
             }
 
             return ErrorCode == 0;
+        }
+
+        /// <summary>
+        /// Uploads a file to S3 with 'Reduced Redundancy' storage class.
+        /// </summary>
+        public bool FileUpload(string bucketname, string dataname, string filepath)
+        {
+            return FileUpload(bucketname, dataname, filepath, S3StorageClass.ReducedRedundancy);
         }
 
         /// <summary>
