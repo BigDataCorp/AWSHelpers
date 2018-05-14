@@ -253,8 +253,11 @@ namespace AWSHelpers
         /// <param name="expressions">A list of expressions to be calculated and returned with the results</param>
         /// <param name="facets">The "facets" parameter (for data grouping)</param>
         /// <param name="returnFields">List of fields to be returned. By default, all return-enabled fields are returned.</param>
+        /// <param name="queryOptions">Allows searching only specific fields.</param>
+        /// <param name="sort"></param>
+        /// <param name="highlight">The highlight field to be used in JSON format.</param>
         /// <returns></returns>
-        public bool RunDocumentSearch (string searchQuery, string filterQuery = "", string cursor = "", string parser = "simple", int start = 0, int size = 10, List<AWSCloudSearchExpressionDefinition> expressions = null, List<AWSCloudSearchFacetFieldDefinition> facets = null, List<string> returnFields = null, string queryOptions = "", string sort = "")
+        public bool RunDocumentSearch (string searchQuery, string filterQuery = "", string cursor = "", string parser = "simple", int start = 0, int size = 10, List<AWSCloudSearchExpressionDefinition> expressions = null, List<AWSCloudSearchFacetFieldDefinition> facets = null, List<string> returnFields = null, string queryOptions = "", string sort = "", string highlight = "")
         {
             ClearErrorInfo ();
             ClearSearchResults ();
@@ -329,6 +332,11 @@ namespace AWSHelpers
                 if (!String.IsNullOrWhiteSpace(sort))
                 {
                     searchRequest.Sort = sort;
+                }
+
+                if (!String.IsNullOrWhiteSpace(highlight))
+                {
+                    searchRequest.Highlight = highlight;
                 }
 
                 SearchResponse searchResponse = CloudSearchClient.Search (searchRequest);
