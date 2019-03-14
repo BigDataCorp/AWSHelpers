@@ -59,7 +59,7 @@ namespace AWSHelpers
             config.RegionEndpoint = regionendpoint;
 
             // Create S3 client
-            S3client = Amazon.AWSClientFactory.CreateAmazonS3Client
+            S3client = new AmazonS3Client
                         (Gadgets.LoadConfigurationSetting("AWSAccessKey", ""),
                          Gadgets.LoadConfigurationSetting("AWSSecretKey", ""),
                          config);
@@ -77,7 +77,7 @@ namespace AWSHelpers
             config.RegionEndpoint = regionendpoint;
 
             // Create S3 client
-            S3client = Amazon.AWSClientFactory.CreateAmazonS3Client
+            S3client = new AmazonS3Client
                         (Gadgets.LoadConfigurationSetting ("AWSAccessKey", AWSAccessKey),
                          Gadgets.LoadConfigurationSetting ("AWSSecretKey", AWSSecretKey),
                          config);

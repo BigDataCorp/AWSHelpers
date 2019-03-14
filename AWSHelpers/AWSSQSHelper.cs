@@ -96,11 +96,11 @@ namespace AWSHelpers
 
                 if (!String.IsNullOrEmpty(AWSAccessKey))
                 {
-                    queueClient = AWSClientFactory.CreateAmazonSQSClient (AWSAccessKey, AWSSecretKey, RegionEndpoint);
+                    queueClient = new AmazonSQSClient (AWSAccessKey, AWSSecretKey, RegionEndpoint);
                 }
                 else
                 {
-                    queueClient = AWSClientFactory.CreateAmazonSQSClient (RegionEndpoint);
+                    queueClient = new AmazonSQSClient(RegionEndpoint);
                 }
                 try
                 {
@@ -157,11 +157,11 @@ namespace AWSHelpers
             {
                 if (!String.IsNullOrEmpty (AWSAccessKey))
                 {
-                    queueClient = AWSClientFactory.CreateAmazonSQSClient (AWSAccessKey, AWSSecretKey, RegionEndpoint);
+                    queueClient = new AmazonSQSClient(AWSAccessKey, AWSSecretKey, RegionEndpoint);
                 }
                 else
                 {
-                    queueClient = AWSClientFactory.CreateAmazonSQSClient (RegionEndpoint);
+                    queueClient = new AmazonSQSClient(RegionEndpoint);
                 }
                 try
                 {
@@ -220,11 +220,11 @@ namespace AWSHelpers
             {
                 if (!String.IsNullOrEmpty (AWSAccessKey))
                 {
-                    queue = AWSClientFactory.CreateAmazonSQSClient (AWSAccessKey, AWSSecretKey,regionendpoint);
+                    queue = new AmazonSQSClient(AWSAccessKey, AWSSecretKey,regionendpoint);
                 }
                 else
                 {
-                    queue = AWSClientFactory.CreateAmazonSQSClient (regionendpoint);
+                    queue = new AmazonSQSClient(regionendpoint);
                 }
                 try
                 {

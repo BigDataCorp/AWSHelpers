@@ -51,7 +51,7 @@ namespace AWSHelpers
             config.RegionEndpoint = regionEndpoint;
 
             // Create EC2 client
-            EC2client = AWSClientFactory.CreateAmazonEC2Client (
+            EC2client = new AmazonEC2Client (
                             AWSAcessKey,
                             AWSSecretKey,
                             config);
