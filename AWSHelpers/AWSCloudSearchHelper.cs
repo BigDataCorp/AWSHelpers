@@ -120,11 +120,18 @@ namespace AWSHelpers
             config.RegionEndpoint                = RegionEndpoint.USEast1;
             config.ServiceURL                    = Gadgets.LoadConfigurationSetting ("AWS_CloudSearch_DomainEndpoint", "");
 
+            string awsAccessKey = Gadgets.LoadConfigurationSetting("AWSAccessKey", "");
+            string awsSecretKey = Gadgets.LoadConfigurationSetting("AWSSecretKey", "");
+
             // Create CloudSearch client
-            CloudSearchClient = new AmazonCloudSearchDomainClient (
-                            Gadgets.LoadConfigurationSetting ("AWSAccessKey", ""),
-                            Gadgets.LoadConfigurationSetting ("AWSSecretKey", ""),
-                            config);
+            if (string.IsNullOrWhiteSpace(awsAccessKey))
+            {
+                CloudSearchClient = new AmazonCloudSearchDomainClient(config);
+            }
+            else
+            {
+                CloudSearchClient = new AmazonCloudSearchDomainClient(awsAccessKey, awsSecretKey, config);
+            }
         }
 
         public AWSCloudSearchHelper (RegionEndpoint regionEndpoint)
@@ -136,11 +143,18 @@ namespace AWSHelpers
             config.RegionEndpoint                = regionEndpoint;
             config.ServiceURL                    = Gadgets.LoadConfigurationSetting ("AWS_CloudSearch_DomainEndpoint", "");
 
+            string awsAccessKey = Gadgets.LoadConfigurationSetting("AWSAccessKey", "");
+            string awsSecretKey = Gadgets.LoadConfigurationSetting("AWSSecretKey", "");
+
             // Create CloudSearch client
-            CloudSearchClient = new AmazonCloudSearchDomainClient (
-                            Gadgets.LoadConfigurationSetting ("AWSAccessKey", ""),
-                            Gadgets.LoadConfigurationSetting ("AWSSecretKey", ""),
-                            config);
+            if (string.IsNullOrWhiteSpace(awsAccessKey))
+            {
+                CloudSearchClient = new AmazonCloudSearchDomainClient(config);
+            }
+            else
+            {
+                CloudSearchClient = new AmazonCloudSearchDomainClient(awsAccessKey, awsSecretKey, config);
+            }
         }
 
         public AWSCloudSearchHelper (RegionEndpoint regionEndpoint, string AWSAcessKey, string AWSSecretKey)
@@ -153,10 +167,14 @@ namespace AWSHelpers
             config.ServiceURL                    = Gadgets.LoadConfigurationSetting ("AWS_CloudSearch_DomainEndpoint", "");
 
             // Create CloudSearch client
-            CloudSearchClient = new AmazonCloudSearchDomainClient (
-                            AWSAcessKey,
-                            AWSSecretKey,
-                            config);
+            if (string.IsNullOrWhiteSpace(AWSAcessKey))
+            {
+                CloudSearchClient = new AmazonCloudSearchDomainClient(config);
+            }
+            else
+            {
+                CloudSearchClient = new AmazonCloudSearchDomainClient(AWSAcessKey, AWSSecretKey, config);
+            }
         }
 
         public AWSCloudSearchHelper (RegionEndpoint regionEndpoint, string AWSAcessKey, string AWSSecretKey, string AWSCloudSearchDomainEndpoint)
@@ -169,10 +187,14 @@ namespace AWSHelpers
             config.ServiceURL                    = AWSCloudSearchDomainEndpoint;
 
             // Create CloudSearch client
-            CloudSearchClient = new AmazonCloudSearchDomainClient (
-                            AWSAcessKey,
-                            AWSSecretKey,
-                            config);
+            if (string.IsNullOrWhiteSpace(AWSAcessKey))
+            {
+                CloudSearchClient = new AmazonCloudSearchDomainClient(config);
+            }
+            else
+            {
+                CloudSearchClient = new AmazonCloudSearchDomainClient(AWSAcessKey, AWSSecretKey, config);
+            }
         }
 
         /// <summary>

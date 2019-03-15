@@ -51,10 +51,14 @@ namespace AWSHelpers
             config.RegionEndpoint = regionEndpoint;
 
             // Create EC2 client
-            EC2client = new AmazonEC2Client (
-                            AWSAcessKey,
-                            AWSSecretKey,
-                            config);
+            if (String.IsNullOrWhiteSpace(AWSAcessKey))
+            {
+                EC2client = new AmazonEC2Client(config);
+            }
+            else
+            {
+                EC2client = new AmazonEC2Client(AWSAcessKey, AWSSecretKey, config);
+            }
         }
 
         /// <summary>

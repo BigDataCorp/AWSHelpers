@@ -58,11 +58,18 @@ namespace AWSHelpers
             config.ReadWriteTimeout = new TimeSpan(1, 0, 0);
             config.RegionEndpoint = regionendpoint;
 
+            string awsAccessKey = Gadgets.LoadConfigurationSetting("AWSAccessKey", "");
+            string awsSecretKey = Gadgets.LoadConfigurationSetting("AWSSecretKey", "");
+
             // Create S3 client
-            S3client = new AmazonS3Client
-                        (Gadgets.LoadConfigurationSetting("AWSAccessKey", ""),
-                         Gadgets.LoadConfigurationSetting("AWSSecretKey", ""),
-                         config);
+            if (String.IsNullOrWhiteSpace(awsAccessKey))
+            {
+                S3client = new AmazonS3Client(config);
+            }
+            else
+            {
+                S3client = new AmazonS3Client (awsAccessKey, awsSecretKey, config);
+            }
 
             // Create the file transfer utility class
             fileTransferUtility = new TransferUtility(S3client);
@@ -77,10 +84,14 @@ namespace AWSHelpers
             config.RegionEndpoint = regionendpoint;
 
             // Create S3 client
-            S3client = new AmazonS3Client
-                        (Gadgets.LoadConfigurationSetting ("AWSAccessKey", AWSAccessKey),
-                         Gadgets.LoadConfigurationSetting ("AWSSecretKey", AWSSecretKey),
-                         config);
+            if (String.IsNullOrWhiteSpace(AWSAccessKey))
+            {
+                S3client = new AmazonS3Client (config);
+            }
+            else
+            {
+                S3client = new AmazonS3Client (AWSAccessKey, AWSSecretKey, config);
+            }
 
             // Create the file transfer utility class
             fileTransferUtility = new TransferUtility (S3client);
