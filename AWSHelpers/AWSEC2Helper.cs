@@ -180,7 +180,7 @@ namespace AWSHelpers
         /// <param name="InstanceCount">The number of instances to be launched</param>
         /// <param name="UserData">The user-data script that will be run as the instance(s) is(are) initialized</param>
         /// <returns>The list of Instance Ids if successful</returns>
-        public List<string> CreateVPCInstances (RegionEndpoint regionEndpoint, string SubnetId, string AMI_ID, string SecurityGroupId, string KeyPairName, string InstanceType, int InstanceCount = 1, string UserData = "")
+        public List<string> CreateVPCInstances (RegionEndpoint regionEndpoint, string SubnetId, string AMI_ID, string SecurityGroupId, string KeyPairName, string InstanceType, int InstanceCount = 1, string UserData = "", string shutdownBehavior = "stop")
         {
             List<string> InstanceIds = new List<string> ();
 
@@ -202,15 +202,16 @@ namespace AWSHelpers
             List<InstanceNetworkInterfaceSpecification> NetworkInterfaces = new List<InstanceNetworkInterfaceSpecification> () { NetworkInterface };
 
             // Create the request object            
-            var launchRequest = new RunInstancesRequest ()
+            var launchRequest = new RunInstancesRequest()
             {
-                ImageId           = AMI_ID,
-                InstanceType      = InstanceType,
-                MinCount          = InstanceCount,
-                MaxCount          = InstanceCount,
-                KeyName           = KeyPairName,
+                ImageId = AMI_ID,
+                InstanceType = InstanceType,
+                MinCount = InstanceCount,
+                MaxCount = InstanceCount,
+                KeyName = KeyPairName,
                 NetworkInterfaces = NetworkInterfaces,
-                UserData          = Gadgets.Base64Encode (UserData)
+                UserData = Gadgets.Base64Encode(UserData),
+                InstanceInitiatedShutdownBehavior = shutdownBehavior.Equals("terminate", StringComparison.OrdinalIgnoreCase) ? ShutdownBehavior.Terminate : ShutdownBehavior.Stop
             };
 
             // Launch the instances
