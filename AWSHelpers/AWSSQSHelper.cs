@@ -16,6 +16,10 @@ using System.Threading;
 using Amazon;
 using Amazon.SQS;
 using Amazon.SQS.Model;
+using RabbitMQ.Client;
+using System.Text;
+using RabbitMQ.Client.Events;
+
 
 namespace AWSHelpers
 {
@@ -44,7 +48,16 @@ namespace AWSHelpers
         public const int AmazonSQSMaxMessageSize = 256 * 1024;                  // AMAZON queue max message size
 
         public string AWSAccessKey;                         
-        public string AWSSecretKey;                         
+        public string AWSSecretKey;  
+        
+        // RabbitMQ fields
+        private static string RabbitHost;
+        private static string RabbitQueueName;
+
+        private static uint RabbitBatchValue;
+        
+        private static IConnection RabbitConnection;
+        private static IModel RabbitChannel;
 
 
         ///////////////////////////////////////////////////////////////////////
@@ -69,6 +82,52 @@ namespace AWSHelpers
         //}
 
         /// <summary>
+        /// This method creates a RabbitMQ queue
+        /// </summary>
+        /// <param name="rabbitMQHost">IP used by RabbitMQ (Without port number)</param>
+        /// <param name="queueName"></param>
+        /// <param name="maxNumberOfMessages">The maximum number of messages that will be received from RabbitMQ</param>
+        /// <param name="errorMessage"></param>
+        /// <returns></returns>
+        public static bool CreateRabbitQueue(string rabbitMQHost, string queueName, int maxNumberOfMessages, out string errorMessage, int messageTTL = 1209600000)
+        {
+            RabbitHost = rabbitMQHost;
+            RabbitQueueName = queueName;
+            RabbitBatchValue = Convert.ToUInt16(maxNumberOfMessages);
+
+            ConnectionFactory factory = new ConnectionFactory();
+            factory.HostName = RabbitHost;
+
+            RabbitConnection = factory.CreateConnection();
+            RabbitChannel = RabbitConnection.CreateModel();
+
+            Dictionary<string, object> args = new Dictionary<string, object>();
+            args.Add("x-message-ttl", messageTTL);
+            
+            bool result = false;
+            errorMessage = String.Empty;
+
+            try
+            {
+                if (!String.IsNullOrWhiteSpace(RabbitQueueName))
+                {
+                    QueueDeclareOk queueResponse = RabbitChannel.QueueDeclare(queue: RabbitQueueName, durable: true, autoDelete: false, exclusive: false, arguments: args);
+                    result = true;
+                }
+                else
+                {
+                    errorMessage = "Invalid Queue Name";
+                }
+            }
+            catch(Exception ex)
+            {
+                errorMessage = ex.Message;
+            }
+
+            return result;
+            
+        }
+        /// <summary>
         /// This static method creates an SQS queue to be used later. For parameter definitions beyond error message, 
         /// please check the online documentation (http://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_CreateQueue.html)
         /// </summary>
@@ -81,6 +140,7 @@ namespace AWSHelpers
                                            string AWSAccessKey = "", string AWSSecretKey = "")
         {
             bool result = false;
+
             ErrorMessage = "";
 
             // Validate and adjust input parameters
@@ -257,26 +317,33 @@ namespace AWSHelpers
         /// <summary>
         /// Returns the approximate number of queued messages
         /// </summary>
-        public int ApproximateNumberOfMessages()
+        public int ApproximateNumberOfMessages(bool useRabbitMQ = false)
         {
+            int result = 0;
             ClearErrorInfo();
 
-            int result = 0;
-            try
+            if(useRabbitMQ)
             {
-                GetQueueAttributesRequest attrreq = new GetQueueAttributesRequest();
-                attrreq.QueueUrl = queueurl.QueueUrl;
-                attrreq.AttributeNames.Add("ApproximateNumberOfMessages");
-                GetQueueAttributesResponse attrresp = queue.GetQueueAttributes(attrreq);
-                if (attrresp != null)
-                    result = attrresp.ApproximateNumberOfMessages;
+                result = RabbitNumberOfMessages();
             }
-            catch (Exception ex)
+            else
             {
-                ErrorCode = e_Exception;
-                ErrorMessage = ex.Message;
+                try
+                {
+                    GetQueueAttributesRequest attrreq = new GetQueueAttributesRequest();
+                    attrreq.QueueUrl = queueurl.QueueUrl;
+                    attrreq.AttributeNames.Add("ApproximateNumberOfMessages");
+                    GetQueueAttributesResponse attrresp = queue.GetQueueAttributes(attrreq);
+                    if (attrresp != null)
+                        result = attrresp.ApproximateNumberOfMessages;
+                }
+                catch (Exception ex)
+                {
+                    ErrorCode = e_Exception;
+                    ErrorMessage = ex.Message;
+                }
             }
-
+            
             return result;
         }
 
@@ -332,23 +399,30 @@ namespace AWSHelpers
         /// <summary>
         /// Deletes a single message from the queue
         /// </summary>
-        public bool DeleteMessage(Message message)
+        public bool DeleteMessage(Message message, bool useRabbitMQ = false)
         {
+            bool result = false;
             ClearErrorInfo();
 
-            bool result = false;
-            try
+            if(useRabbitMQ)
             {
-                delMessageRequest.ReceiptHandle = message.ReceiptHandle;
-                queue.DeleteMessage(delMessageRequest);
-                result = true;
+                result = RabbitDeleteMessage(message);
             }
-            catch (Exception ex)
+            else
             {
-                ErrorCode = e_Exception;
-                ErrorMessage = ex.Message;
+                try
+                {
+                    delMessageRequest.ReceiptHandle = message.ReceiptHandle;
+                    queue.DeleteMessage(delMessageRequest);
+                    result = true;
+                }
+                catch (Exception ex)
+                {
+                    ErrorCode = e_Exception;
+                    ErrorMessage = ex.Message;
+                }
             }
-
+            
             return result;
         }
 
@@ -357,35 +431,42 @@ namespace AWSHelpers
         /// </summary>
         /// <param name="messages"></param>
         /// <returns></returns>
-        public bool DeleteMessages (IList<Message> messages)
+        public bool DeleteMessages (IList<Message> messages, bool useRabbitMQ = false)
         {
             ClearErrorInfo ();
 
-            try
+            if(useRabbitMQ)
             {
-                var request = new DeleteMessageBatchRequest
-                {
-                    QueueUrl = queueurl.QueueUrl,
-                    Entries = messages.Select (i => new DeleteMessageBatchRequestEntry (i.MessageId, i.ReceiptHandle)).ToList ()
-                };
-                var response = queue.DeleteMessageBatch (request);
-
-                if (response.Failed != null && response.Failed.Count > 0)
-                {
-                    ErrorMessage = String.Format ("ErrorCount: {0}, Messages: [{1}]", response.Failed.Count,
-                        String.Join (",", response.Failed.Select (i => i.Message).Distinct ()));
-
-                    //var retryList = messages.Where (i => response.Failed.Any (j => j.Id == i.MessageId));
-                    //foreach (var e in retryList)
-                    //    DeleteMessage (e);
-                }
-
-                return String.IsNullOrEmpty (ErrorMessage);
+                return RabbitDeleteMessages(messages);
             }
-            catch (Exception ex)
+            else
             {
-                ErrorCode    = e_Exception;
-                ErrorMessage = ex.Message;
+                try
+                {
+                    var request = new DeleteMessageBatchRequest
+                    {
+                        QueueUrl = queueurl.QueueUrl,
+                        Entries = messages.Select (i => new DeleteMessageBatchRequestEntry (i.MessageId, i.ReceiptHandle)).ToList ()
+                    };
+                    var response = queue.DeleteMessageBatch (request);
+
+                    if (response.Failed != null && response.Failed.Count > 0)
+                    {
+                        ErrorMessage = String.Format ("ErrorCount: {0}, Messages: [{1}]", response.Failed.Count,
+                            String.Join (",", response.Failed.Select (i => i.Message).Distinct ()));
+
+                        //var retryList = messages.Where (i => response.Failed.Any (j => j.Id == i.MessageId));
+                        //foreach (var e in retryList)
+                        //    DeleteMessage (e);
+                    }
+
+                    return String.IsNullOrEmpty (ErrorMessage);
+                }
+                catch (Exception ex)
+                {
+                    ErrorCode    = e_Exception;
+                    ErrorMessage = ex.Message;
+                }
             }
 
             return false;
@@ -394,25 +475,32 @@ namespace AWSHelpers
         /// <summary>
         /// Insert a message in the queue
         /// </summary>
-        public bool EnqueueMessage(string msgbody)
+        public bool EnqueueMessage(string msgbody, bool useRabbitMQ = false)
         {
-            ClearErrorInfo();
-
             bool result = false;
-            try
+            ClearErrorInfo();
+            
+            if(useRabbitMQ)
             {
-                SendMessageRequest sendMessageRequest = new SendMessageRequest();
-                sendMessageRequest.QueueUrl = queueurl.QueueUrl;
-                sendMessageRequest.MessageBody = msgbody;
-                queue.SendMessage(sendMessageRequest);
-                result = true;
+                result = RabbitEnqueueMessage(msgbody);
             }
-            catch (Exception ex)
+            else
             {
-                ErrorCode = e_Exception;
-                ErrorMessage = ex.Message;
+                try
+                {
+                    SendMessageRequest sendMessageRequest = new SendMessageRequest();
+                    sendMessageRequest.QueueUrl = queueurl.QueueUrl;
+                    sendMessageRequest.MessageBody = msgbody;
+                    queue.SendMessage(sendMessageRequest);
+                    result = true;
+                }
+                catch (Exception ex)
+                {
+                    ErrorCode = e_Exception;
+                    ErrorMessage = ex.Message;
+                }
             }
-
+            
             return result;
         }
 
@@ -447,64 +535,71 @@ namespace AWSHelpers
         /// <summary>
         /// Enqueues multiple messages into the opened queue at the same time
         /// </summary>
-        public bool EnqueueMessages (IList<string> messages)
+        public bool EnqueueMessages (IList<string> messages, bool useRabbitMQ = false)
         {
-            ClearErrorInfo ();
-
             bool result = false;
-            try
+            ClearErrorInfo();
+
+            if(useRabbitMQ)
             {
-                var request = new SendMessageBatchRequest
-                {
-                    QueueUrl = queueurl.QueueUrl
-                };
-                List<SendMessageBatchRequestEntry> entries = new List<SendMessageBatchRequestEntry> ();
-
-                // Messages counter
-                int ix  = 0;
-
-                // Iterating until theres no message left
-                while (ix < messages.Count)
-                {
-                    entries.Clear ();
-
-                    // Storing upper limit of iteration
-                    var len = Math.Min (ix + 10, messages.Count);
-
-                    // Iterating over 10
-                    for (var i = ix; i < len; i++)
-                    {
-                        entries.Add (new SendMessageBatchRequestEntry (i.ToString (), messages[i]));
-                        ix++;
-                    }
-
-                    // Renewing entries from the object
-                    request.Entries = entries;
-
-                    // Batch Sending
-                    var response = queue.SendMessageBatch (request);
-
-                    // If any message failed to enqueue, use individual enqueue method
-                    if (response.Failed != null && response.Failed.Count > 0)
-                    {
-                        // Hiccup
-                        Thread.Sleep (100);
-
-                        foreach (var failedMessage in response.Failed)
-                        {
-                            // Individual Enqueues
-                            EnqueueMessage (failedMessage.Message);
-                        }
-                    }
-
-                }
-
-                result = true;
+                result = RabbitEnqueueMessages(messages);
             }
-            catch (Exception ex)
+            else 
             {
-                ErrorCode    = e_Exception;
-                ErrorMessage = ex.Message;
+                try
+                {
+                    var request = new SendMessageBatchRequest
+                    {
+                        QueueUrl = queueurl.QueueUrl
+                    };
+                    List<SendMessageBatchRequestEntry> entries = new List<SendMessageBatchRequestEntry>();
+
+                    // Messages counter
+                    int ix = 0;
+
+                    // Iterating until theres no message left
+                    while (ix < messages.Count)
+                    {
+                        entries.Clear();
+
+                        // Storing upper limit of iteration
+                        var len = Math.Min(ix + 10, messages.Count);
+
+                        // Iterating over 10
+                        for (var i = ix; i < len; i++)
+                        {
+                            entries.Add(new SendMessageBatchRequestEntry(i.ToString(), messages[i]));
+                            ix++;
+                        }
+
+                        // Renewing entries from the object
+                        request.Entries = entries;
+
+                        // Batch Sending
+                        var response = queue.SendMessageBatch(request);
+
+                        // If any message failed to enqueue, use individual enqueue method
+                        if (response.Failed != null && response.Failed.Count > 0)
+                        {
+                            // Hiccup
+                            Thread.Sleep(100);
+
+                            foreach (var failedMessage in response.Failed)
+                            {
+                                // Individual Enqueues
+                                EnqueueMessage(failedMessage.Message);
+                            }
+                        }
+
+                    }
+
+                    result = true;
+                }
+                catch (Exception ex)
+                {
+                    ErrorCode = e_Exception;
+                    ErrorMessage = ex.Message;
+                }
             }
 
             return result;
@@ -546,45 +641,70 @@ namespace AWSHelpers
         /// <summary>
         /// Initiate a "message receive" loop to fetch messages from the queue, returning messages as they are fetched in IEnumerable (yeld return) format
         /// </summary>
-        public IEnumerable<Message> GetMessages (bool throwOnError = false)
+        public IEnumerable<Message> GetMessages (bool throwOnError = false, bool useRabbitMQ = false)
         {
-            do
+            if(useRabbitMQ)
             {
-                // Dequeueing messages from the Queue
-                if (!DeQueueMessages ())
-                {
-                    Thread.Sleep (250); // Hiccup                   
-                    continue;
-                }
+                ManualResetEvent waitEvent = new ManualResetEvent(false);
 
-                // Checking for no message received, and false positives situations
-                if (!AnyMessageReceived ())
-                {
-                    break;
-                }
+                List<Message> messages;
 
-                // Iterating over dequeued messages
-                IEnumerable<Message> messages = null;
-                try
+                do
                 {
-                    messages = GetDequeuedMessages ();
-                }
-                catch (Exception ex)
+                    messages = RabbitGetMessages();
+                    
+                    foreach(Message message in messages)
+                    {
+                        yield return message;
+                    }
+
+                    if(RabbitChannel.MessageCount(RabbitQueueName) == 0)
+                    {
+                        break;
+                    }
+
+                } while(true);
+            }   
+            else
+            {
+                do
                 {
-                    ErrorCode = e_Exception;
-                    ErrorMessage = ex.Message;
-                    if (throwOnError)
-                        throw ex;
-                }
+                    // Dequeueing messages from the Queue
+                    if (!DeQueueMessages ())
+                    {
+                        Thread.Sleep (250); // Hiccup                   
+                        continue;
+                    }
 
-                if (messages == null) continue;
+                    // Checking for no message received, and false positives situations
+                    if (!AnyMessageReceived ())
+                    {
+                        break;
+                    }
 
-                foreach (Message awsMessage in messages)
-                {
-                    yield return awsMessage;
-                }
+                    // Iterating over dequeued messages
+                    IEnumerable<Message> messages = null;
+                    try
+                    {
+                        messages = GetDequeuedMessages ();
+                    }
+                    catch (Exception ex)
+                    {
+                        ErrorCode = e_Exception;
+                        ErrorMessage = ex.Message;
+                        if (throwOnError)
+                            throw ex;
+                    }
 
-            } while (true); // Loops Forever
+                    if (messages == null) continue;
+
+                    foreach (Message awsMessage in messages)
+                    {
+                        yield return awsMessage;
+                    }
+
+                } while (true); // Loops Forever
+            } 
         }
 
         /// <summary>
@@ -593,22 +713,35 @@ namespace AWSHelpers
         /// </summary>
         /// <param name="maxWaitTimeInMilliseconds">The maximum wait time for the exponentially increasing wait periods</param>
         /// <param name="waitCallback">A callback function to be called whenever there are no messages left in the queue and a wait period is about to be initiated</param>
-        public IEnumerable<Message> GetMessagesWithWait (int maxWaitTimeInMilliseconds = 1800000, Func<int, int, bool> waitCallback = null, bool throwOnError = false)
+        public IEnumerable<Message> GetMessagesWithWait (int maxWaitTimeInMilliseconds = 1800000, Func<int, int, bool> waitCallback = null, bool throwOnError = false, bool useRabbitMQ = false)
         {
             int fallbackWaitTime = 1;
 
             // start dequeue loop
             do
             {
-                // dequeue messages
-                foreach (var message in GetMessages (throwOnError))
+                if(useRabbitMQ)
                 {
-                    // Reseting fallback time
-                    fallbackWaitTime = 1;
+                    foreach(Message message in GetMessages(useRabbitMQ: true))
+                    {
+                        fallbackWaitTime = 1;
 
-                    // process message
-                    yield return message;
+                        yield return message;
+                    }
                 }
+                else
+                {
+                    // dequeue messages
+                    foreach (var message in GetMessages(throwOnError))
+                    {
+                        // Reseting fallback time
+                        fallbackWaitTime = 1;
+
+                        // process message
+                        yield return message;
+                    }
+                }
+                
 
                 // If no message was found, increases the wait time
                 int waitTime;
@@ -643,40 +776,48 @@ namespace AWSHelpers
         /// <summary>
         /// This method repeatedly dequeues messages until there are no messages left
         /// </summary>
-        public void ClearQueue ()
+        public void ClearQueue (bool useRabbitMQ = false)
         {
-            // TODO: We must alter the code to check how many messages are left in the queue. If there are too many messages, we should destroy the queue, wait one minute, and create it again.
-            do
+
+            if(useRabbitMQ)
             {
-                // Dequeueing Messages
-                if (!DeQueueMessages ())
+                RabbitClearQueue();
+            }
+            else
+            {
+                // TODO: We must alter the code to check how many messages are left in the queue. If there are too many messages, we should destroy the queue, wait one minute, and create it again.
+                do
                 {
-                    // Checking for the need to abort (queue error)
-                    if (!String.IsNullOrWhiteSpace (ErrorMessage))
+                    // Dequeueing Messages
+                    if (!DeQueueMessages ())
                     {
-                        return; // Abort
+                        // Checking for the need to abort (queue error)
+                        if (!String.IsNullOrWhiteSpace (ErrorMessage))
+                        {
+                            return; // Abort
+                        }
+
+                        continue; // Continue in case de dequeue fails, to make sure no message will be kept in the queue
                     }
 
-                    continue; // Continue in case de dequeue fails, to make sure no message will be kept in the queue
-                }
+                    // Retrieving Message Results
+                    var resultMessages = rcvMessageResponse.Messages;
 
-                // Retrieving Message Results
-                var resultMessages = rcvMessageResponse.Messages;
+                    // Checking for no message dequeued
+                    if (resultMessages.Count == 0)
+                    {
+                        break; // Breaks loop
+                    }
 
-                // Checking for no message dequeued
-                if (resultMessages.Count == 0)
-                {
-                    break; // Breaks loop
-                }
+                    // Iterating over messages of the result to remove it
+                    foreach (Message message in resultMessages)
+                    {
+                        // Deleting Message from Queue
+                        DeleteMessage (message);
+                    }
 
-                // Iterating over messages of the result to remove it
-                foreach (Message message in resultMessages)
-                {
-                    // Deleting Message from Queue
-                    DeleteMessage (message);
-                }
-
-            } while (true);
+                } while (true);
+            }
         }
 
         /// <summary>
@@ -730,6 +871,201 @@ namespace AWSHelpers
             {
                 QueueUrl = queueurl.QueueUrl
             });
+        }
+
+        ///////////////////////////////////////////////////////////////////////
+        //                    RabbitMQ Methods                               //
+        ///////////////////////////////////////////////////////////////////////
+
+        /// <summary>
+        /// Get number of messages from RabbitMQ
+        /// </summary>
+        /// <returns></returns>
+        private int RabbitNumberOfMessages()
+        {
+            long totalMessages = 0;
+
+            totalMessages = RabbitChannel.MessageCount(RabbitQueueName);
+
+            return Convert.ToInt32(totalMessages);
+        } 
+
+        /// <summary>
+        /// Insert a message in the RabbitMQ queue
+        /// </summary>
+        private bool RabbitEnqueueMessage(string msgbody)
+        {
+            bool result = false;
+            byte[] body;
+
+            try
+            {
+                body = Encoding.UTF8.GetBytes(msgbody);
+
+                RabbitChannel.BasicPublish(exchange: "", routingKey: RabbitQueueName, basicProperties: null, body: body);
+                
+                result = true;
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Sends multiple messages into RabbitMQ
+        /// </summary>
+        private bool RabbitEnqueueMessages(IList<string> messages)
+        {
+            bool result = false;
+            byte[] body;
+
+            try
+            {
+                foreach (string message in messages)
+                {
+                    body = Encoding.UTF8.GetBytes(message);
+
+                    RabbitChannel.BasicPublish(exchange: "", routingKey: RabbitQueueName, basicProperties: null, body: body);
+                }
+                result = true;
+            }
+            catch(Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            
+            return result;
+        }
+
+        /// <summary>
+        /// Delete one message from RabbitMQ
+        /// </summary>
+        /// <param name="message"></param>
+        /// <returns></returns>
+        private bool RabbitDeleteMessage(Message message)
+        {
+            bool result = false;
+
+            ulong messageTag = Convert.ToUInt64(message.MessageId);
+
+            try
+            {
+                RabbitChannel.BasicAck(messageTag, false);
+                result = true;
+            }
+            catch(Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            
+            return result;
+        }
+
+        /// <summary>
+        /// Delete messages from RabbitMQ
+        /// </summary>
+        /// <param name="messages"></param>
+        /// <returns></returns>
+        private bool RabbitDeleteMessages(IList<Message> messages)
+        {
+            bool result = false;
+            ulong messageTag;
+
+            try
+            {
+                foreach(Message message in messages)
+                {
+                    messageTag = Convert.ToUInt64(message.MessageId);
+                    RabbitChannel.BasicAck(messageTag, false);
+                }
+                
+                result = true;
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+            }
+            
+            return result;
+        }
+
+        /// <summary>
+        /// This method repeatedly dequeues messages until there are no messages left
+        /// </summary>
+        private void RabbitClearQueue()
+        {
+            RabbitChannel.QueuePurge(RabbitQueueName);     
+        }
+
+        /// <summary>
+        /// Get messages from RabbitMQ
+        /// </summary>
+        /// <returns></returns>
+        private List<Message> RabbitGetMessages()
+        {
+            uint messageCount = RabbitChannel.MessageCount(RabbitQueueName);
+            if (RabbitBatchValue > messageCount)
+            {
+                RabbitBatchValue = messageCount;
+            }
+
+            RabbitChannel.BasicQos(0, Convert.ToUInt16(RabbitBatchValue), false);
+
+            ManualResetEvent waitEvent = new ManualResetEvent(false);
+
+            EventingBasicConsumer consumer = new EventingBasicConsumer(RabbitChannel);
+
+            List<Message> messages = new List<Message>();
+            Message messageobj;
+
+            byte[] body;
+
+            long timestamp;
+            string consumerTag;
+            int count = 0;
+
+            consumer.Received += (sender, eventArgs) =>
+            {
+                messageobj = new Message();
+
+                body = eventArgs.Body;
+                timestamp = eventArgs.BasicProperties.Timestamp.UnixTime;
+
+                messageobj.Body = Encoding.UTF8.GetString(body);
+                messageobj.Attributes.Add("timestamp", timestamp.ToString());
+                messageobj.MessageId = eventArgs.DeliveryTag.ToString();
+
+                messages.Add(messageobj);
+                count++;
+                
+                if(count % RabbitBatchValue == 0)
+                {
+                    waitEvent.Set();
+                }
+            };
+
+            if (RabbitChannel.MessageCount(RabbitQueueName) > 0)
+            {
+                consumerTag = RabbitChannel.BasicConsume(RabbitQueueName, false, consumer);
+
+                waitEvent.WaitOne();
+                
+                RabbitChannel.BasicCancel(consumerTag);
+                return messages;
+            }
+            return messages;
+        }
+
+        /// <summary>
+        /// Finish RabbitMQ connection to close program execution
+        /// </summary>
+        public void RabbitDispose()
+        {
+            RabbitChannel.Dispose();
+            RabbitConnection.Dispose();
         }
     }
 }
