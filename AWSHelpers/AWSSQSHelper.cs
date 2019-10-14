@@ -51,19 +51,19 @@ namespace AWSHelpers
         public string AWSSecretKey;  
         
         // RabbitMQ fields
-        private static string RabbitHost;
-        private static string RabbitQueueName;
+        private string RabbitHost;
+        private string RabbitQueueName;
 
-        private static uint RabbitBatchValue;
+        private uint RabbitBatchValue;
         
         private static IConnection RabbitConnection;
         private static IModel RabbitChannel;
+        private bool UseRabbitMQ;
 
 
         ///////////////////////////////////////////////////////////////////////
         //                    Methods & Functions                            //
         ///////////////////////////////////////////////////////////////////////
-
 
 
         /// <summary>
@@ -81,52 +81,7 @@ namespace AWSHelpers
         //                    regionEndpoint);
         //}
 
-        /// <summary>
-        /// This method creates a RabbitMQ queue
-        /// </summary>
-        /// <param name="rabbitMQHost">IP used by RabbitMQ (Without port number)</param>
-        /// <param name="queueName"></param>
-        /// <param name="maxNumberOfMessages">The maximum number of messages that will be received from RabbitMQ</param>
-        /// <param name="errorMessage"></param>
-        /// <returns></returns>
-        public static bool CreateRabbitQueue(string rabbitMQHost, string queueName, int maxNumberOfMessages, out string errorMessage, int messageTTL = 1209600000)
-        {
-            RabbitHost = rabbitMQHost;
-            RabbitQueueName = queueName;
-            RabbitBatchValue = Convert.ToUInt16(maxNumberOfMessages);
-
-            ConnectionFactory factory = new ConnectionFactory();
-            factory.HostName = RabbitHost;
-
-            RabbitConnection = factory.CreateConnection();
-            RabbitChannel = RabbitConnection.CreateModel();
-
-            Dictionary<string, object> args = new Dictionary<string, object>();
-            args.Add("x-message-ttl", messageTTL);
-            
-            bool result = false;
-            errorMessage = String.Empty;
-
-            try
-            {
-                if (!String.IsNullOrWhiteSpace(RabbitQueueName))
-                {
-                    QueueDeclareOk queueResponse = RabbitChannel.QueueDeclare(queue: RabbitQueueName, durable: true, autoDelete: false, exclusive: false, arguments: args);
-                    result = true;
-                }
-                else
-                {
-                    errorMessage = "Invalid Queue Name";
-                }
-            }
-            catch(Exception ex)
-            {
-                errorMessage = ex.Message;
-            }
-
-            return result;
-            
-        }
+        
         /// <summary>
         /// This static method creates an SQS queue to be used later. For parameter definitions beyond error message, 
         /// please check the online documentation (http://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_CreateQueue.html)
@@ -142,46 +97,46 @@ namespace AWSHelpers
             bool result = false;
 
             ErrorMessage = "";
-
+            
             // Validate and adjust input parameters
-            DelaySeconds                  = Math.Min (Math.Max (DelaySeconds, 0), 900);
-            MaximumMessageSize            = Math.Min (Math.Max (MaximumMessageSize, 1024), AmazonSQSMaxMessageSize);
-            MessageRetentionPeriod        = Math.Min (Math.Max (MessageRetentionPeriod, 60), 1209600);
-            ReceiveMessageWaitTimeSeconds = Math.Min (Math.Max (ReceiveMessageWaitTimeSeconds, 0), 20);
-            VisibilityTimeout             = Math.Min (Math.Max (VisibilityTimeout, 0), 43200);
+            DelaySeconds = Math.Min(Math.Max(DelaySeconds, 0), 900);
+            MaximumMessageSize = Math.Min(Math.Max(MaximumMessageSize, 1024), AmazonSQSMaxMessageSize);
+            MessageRetentionPeriod = Math.Min(Math.Max(MessageRetentionPeriod, 60), 1209600);
+            ReceiveMessageWaitTimeSeconds = Math.Min(Math.Max(ReceiveMessageWaitTimeSeconds, 0), 20);
+            VisibilityTimeout = Math.Min(Math.Max(VisibilityTimeout, 0), 43200);
 
-            if (!String.IsNullOrWhiteSpace (QueueName))
+            if (!String.IsNullOrWhiteSpace(QueueName))
             {
                 IAmazonSQS queueClient;
 
                 if (!String.IsNullOrEmpty(AWSAccessKey))
                 {
-                    queueClient = AWSClientFactory.CreateAmazonSQSClient (AWSAccessKey, AWSSecretKey, RegionEndpoint);
+                    queueClient = AWSClientFactory.CreateAmazonSQSClient(AWSAccessKey, AWSSecretKey, RegionEndpoint);
                 }
                 else
                 {
-                    queueClient = AWSClientFactory.CreateAmazonSQSClient (RegionEndpoint);
+                    queueClient = AWSClientFactory.CreateAmazonSQSClient(RegionEndpoint);
                 }
                 try
                 {
                     // Generate the queue creation request
-                    CreateQueueRequest createRequest = new CreateQueueRequest ();
+                    CreateQueueRequest createRequest = new CreateQueueRequest();
                     createRequest.QueueName = QueueName;
 
                     // Add other creation parameters
-                    createRequest.Attributes.Add ("DelaySeconds",                  DelaySeconds.ToString ());
-                    createRequest.Attributes.Add ("MaximumMessageSize",            MaximumMessageSize.ToString ());
-                    createRequest.Attributes.Add ("MessageRetentionPeriod",        MessageRetentionPeriod.ToString ());
-                    createRequest.Attributes.Add ("ReceiveMessageWaitTimeSeconds", ReceiveMessageWaitTimeSeconds.ToString ());
-                    createRequest.Attributes.Add ("VisibilityTimeout",             VisibilityTimeout.ToString ());
+                    createRequest.Attributes.Add("DelaySeconds", DelaySeconds.ToString());
+                    createRequest.Attributes.Add("MaximumMessageSize", MaximumMessageSize.ToString());
+                    createRequest.Attributes.Add("MessageRetentionPeriod", MessageRetentionPeriod.ToString());
+                    createRequest.Attributes.Add("ReceiveMessageWaitTimeSeconds", ReceiveMessageWaitTimeSeconds.ToString());
+                    createRequest.Attributes.Add("VisibilityTimeout", VisibilityTimeout.ToString());
 
                     // Run the request
-                    CreateQueueResponse createResponse = queueClient.CreateQueue (createRequest);
+                    CreateQueueResponse createResponse = queueClient.CreateQueue(createRequest);
 
                     // Check for errros
                     if (createResponse.HttpStatusCode != System.Net.HttpStatusCode.OK)
                     {
-                        ErrorMessage = "An error occurred while creating the queue. Please try again."; 
+                        ErrorMessage = "An error occurred while creating the queue. Please try again.";
                     }
 
                     result = true;
@@ -195,6 +150,7 @@ namespace AWSHelpers
             {
                 ErrorMessage = "Invalid Queue Name";
             }
+            
 
             return result;
         }
@@ -206,12 +162,11 @@ namespace AWSHelpers
         /// <param name="RegionEndpoint">Endpoint corresponding to the AWS region where the queue is located</param>
         /// <param name="ErrorMessage">String that will receive the error message, if an error occurs</param>
         /// <returns></returns>
-        public static bool DestroySQSQueue (string QueueName, RegionEndpoint RegionEndpoint, out string ErrorMessage, string AWSAccessKey = "", string AWSSecretKey = "")
+        public static bool DeleteSQSQueue (string QueueName, RegionEndpoint RegionEndpoint, out string ErrorMessage, string AWSAccessKey = "", string AWSSecretKey = "")
         {
             bool result = false;
             ErrorMessage = "";
             IAmazonSQS queueClient;
-
 
             if (!String.IsNullOrWhiteSpace (QueueName))
             {
@@ -245,7 +200,9 @@ namespace AWSHelpers
         /// </summary>
         public AWSSQSHelper()
         {
+
         }
+
 
         /// <summary>
         /// Class constructor that initializes and opens the queue based on input parameters
@@ -256,6 +213,14 @@ namespace AWSHelpers
         public AWSSQSHelper (string queueName, int maxNumberOfMessages, RegionEndpoint regionEndpoint, String AWSAccessKey="", String AWSSecretKey="")
         {
             OpenQueue(queueName, maxNumberOfMessages, regionEndpoint,AWSAccessKey,AWSSecretKey);
+        }
+
+        public void DisposeResources()
+        {
+            if(UseRabbitMQ)
+            {
+                RabbitDispose();
+            }
         }
 
         /// <summary>
@@ -270,46 +235,54 @@ namespace AWSHelpers
         /// <summary>
         /// The method opens the queue
         /// </summary>
-        public bool OpenQueue(string queuename, int maxnumberofmessages, RegionEndpoint regionendpoint,String AWSAccessKey="", String AWSSecretKey="")
+        public bool OpenQueue(string queuename, int maxnumberofmessages, RegionEndpoint regionendpoint,String AWSAccessKey="", String AWSSecretKey="", bool useRabbitMQ = false, RabbitMQParameters rabbitParameters = null)
         {
             ClearErrorInfo();
 
             IsValid = false;
+            UseRabbitMQ = useRabbitMQ;
 
-            if (!string.IsNullOrWhiteSpace(queuename))
+            if (UseRabbitMQ)
             {
-                if (!String.IsNullOrEmpty (AWSAccessKey))
-                {
-                    queue = AWSClientFactory.CreateAmazonSQSClient (AWSAccessKey, AWSSecretKey,regionendpoint);
-                }
-                else
-                {
-                    queue = AWSClientFactory.CreateAmazonSQSClient (regionendpoint);
-                }
-                try
-                {
-                    // Get queue url
-                    GetQueueUrlRequest sqsRequest = new GetQueueUrlRequest();
-                    sqsRequest.QueueName          = queuename;
-                    queueurl                      = queue.GetQueueUrl(sqsRequest);
-
-                    // Format receive messages request
-                    rcvMessageRequest                     = new ReceiveMessageRequest();
-                    rcvMessageRequest.QueueUrl            = queueurl.QueueUrl;
-                    rcvMessageRequest.MaxNumberOfMessages = maxnumberofmessages;
-
-                    // Format the delete messages request
-                    delMessageRequest          = new DeleteMessageRequest();
-                    delMessageRequest.QueueUrl = queueurl.QueueUrl;
-
-                    IsValid = true;
-                }
-                catch (Exception ex)
-                {
-                    ErrorCode    = e_Exception;
-                    ErrorMessage = ex.Message;
-                }
+                IsValid = OpenRabbitQueue(queuename, maxnumberofmessages, rabbitParameters);
             }
+            else
+            {
+                if (!string.IsNullOrWhiteSpace(queuename))
+                {
+                    if (!String.IsNullOrEmpty (AWSAccessKey))
+                    {
+                        queue = AWSClientFactory.CreateAmazonSQSClient (AWSAccessKey, AWSSecretKey,regionendpoint);
+                    }
+                    else
+                    {
+                        queue = AWSClientFactory.CreateAmazonSQSClient (regionendpoint);
+                    }
+                    try
+                    {
+                        // Get queue url
+                        GetQueueUrlRequest sqsRequest = new GetQueueUrlRequest();
+                        sqsRequest.QueueName          = queuename;
+                        queueurl                      = queue.GetQueueUrl(sqsRequest);
+
+                        // Format receive messages request
+                        rcvMessageRequest                     = new ReceiveMessageRequest();
+                        rcvMessageRequest.QueueUrl            = queueurl.QueueUrl;
+                        rcvMessageRequest.MaxNumberOfMessages = maxnumberofmessages;
+
+                        // Format the delete messages request
+                        delMessageRequest          = new DeleteMessageRequest();
+                        delMessageRequest.QueueUrl = queueurl.QueueUrl;
+
+                        IsValid = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        ErrorCode    = e_Exception;
+                        ErrorMessage = ex.Message;
+                    }
+                }
+            }           
 
             return IsValid;
         }
@@ -317,12 +290,12 @@ namespace AWSHelpers
         /// <summary>
         /// Returns the approximate number of queued messages
         /// </summary>
-        public int ApproximateNumberOfMessages(bool useRabbitMQ = false)
+        public int ApproximateNumberOfMessages()
         {
             int result = 0;
             ClearErrorInfo();
 
-            if(useRabbitMQ)
+            if (UseRabbitMQ)
             {
                 result = RabbitNumberOfMessages();
             }
@@ -399,12 +372,12 @@ namespace AWSHelpers
         /// <summary>
         /// Deletes a single message from the queue
         /// </summary>
-        public bool DeleteMessage(Message message, bool useRabbitMQ = false)
+        public bool DeleteMessage(Message message)
         {
             bool result = false;
             ClearErrorInfo();
 
-            if(useRabbitMQ)
+            if (UseRabbitMQ)
             {
                 result = RabbitDeleteMessage(message);
             }
@@ -431,11 +404,11 @@ namespace AWSHelpers
         /// </summary>
         /// <param name="messages"></param>
         /// <returns></returns>
-        public bool DeleteMessages (IList<Message> messages, bool useRabbitMQ = false)
+        public bool DeleteMessages (IList<Message> messages)
         {
             ClearErrorInfo ();
 
-            if(useRabbitMQ)
+            if (UseRabbitMQ)
             {
                 return RabbitDeleteMessages(messages);
             }
@@ -475,12 +448,12 @@ namespace AWSHelpers
         /// <summary>
         /// Insert a message in the queue
         /// </summary>
-        public bool EnqueueMessage(string msgbody, bool useRabbitMQ = false)
+        public bool EnqueueMessage(string msgbody)
         {
             bool result = false;
             ClearErrorInfo();
-            
-            if(useRabbitMQ)
+
+            if (UseRabbitMQ)
             {
                 result = RabbitEnqueueMessage(msgbody);
             }
@@ -514,13 +487,25 @@ namespace AWSHelpers
             int retrycount = maxretries;
             while (true)
             {
-                // Try the insertion
-                if (EnqueueMessage(msgbody))
+                if (UseRabbitMQ)
                 {
-                    result = true;
-                    break;
+                    // Try the insertion
+                    if (EnqueueMessage(msgbody))
+                    {
+                        result = true;
+                        break;
+                    }
                 }
-
+                else
+                {
+                    // Try the insertion
+                    if (EnqueueMessage(msgbody))
+                    {
+                        result = true;
+                        break;
+                    }
+                }
+                
                 // Retry
                 retrycount--;
                 if (retrycount <= 0)
@@ -535,12 +520,12 @@ namespace AWSHelpers
         /// <summary>
         /// Enqueues multiple messages into the opened queue at the same time
         /// </summary>
-        public bool EnqueueMessages (IList<string> messages, bool useRabbitMQ = false)
+        public bool EnqueueMessages (IList<string> messages)
         {
             bool result = false;
             ClearErrorInfo();
 
-            if(useRabbitMQ)
+            if (UseRabbitMQ)
             {
                 result = RabbitEnqueueMessages(messages);
             }
@@ -641,9 +626,9 @@ namespace AWSHelpers
         /// <summary>
         /// Initiate a "message receive" loop to fetch messages from the queue, returning messages as they are fetched in IEnumerable (yeld return) format
         /// </summary>
-        public IEnumerable<Message> GetMessages (bool throwOnError = false, bool useRabbitMQ = false)
+        public IEnumerable<Message> GetMessages (bool throwOnError = false)
         {
-            if(useRabbitMQ)
+            if (UseRabbitMQ)
             {
                 ManualResetEvent waitEvent = new ManualResetEvent(false);
 
@@ -713,16 +698,16 @@ namespace AWSHelpers
         /// </summary>
         /// <param name="maxWaitTimeInMilliseconds">The maximum wait time for the exponentially increasing wait periods</param>
         /// <param name="waitCallback">A callback function to be called whenever there are no messages left in the queue and a wait period is about to be initiated</param>
-        public IEnumerable<Message> GetMessagesWithWait (int maxWaitTimeInMilliseconds = 1800000, Func<int, int, bool> waitCallback = null, bool throwOnError = false, bool useRabbitMQ = false)
+        public IEnumerable<Message> GetMessagesWithWait (int maxWaitTimeInMilliseconds = 1800000, Func<int, int, bool> waitCallback = null, bool throwOnError = false)
         {
             int fallbackWaitTime = 1;
 
             // start dequeue loop
             do
             {
-                if(useRabbitMQ)
+                if (UseRabbitMQ)
                 {
-                    foreach(Message message in GetMessages(useRabbitMQ: true))
+                    foreach(Message message in GetMessages())
                     {
                         fallbackWaitTime = 1;
 
@@ -776,10 +761,10 @@ namespace AWSHelpers
         /// <summary>
         /// This method repeatedly dequeues messages until there are no messages left
         /// </summary>
-        public void ClearQueue (bool useRabbitMQ = false)
+        public void ClearQueue ()
         {
 
-            if(useRabbitMQ)
+            if (UseRabbitMQ)
             {
                 RabbitClearQueue();
             }
@@ -876,6 +861,53 @@ namespace AWSHelpers
         ///////////////////////////////////////////////////////////////////////
         //                    RabbitMQ Methods                               //
         ///////////////////////////////////////////////////////////////////////
+
+        /// <summary>
+        /// This method creates a connection with RabbitMQ queue
+        /// </summary>
+        /// <param name="rabbitMQHost">IP used by RabbitMQ (Without port number)</param>
+        /// <param name="queueName"></param>
+        /// <param name="maxNumberOfMessages">The maximum number of messages that will be received from RabbitMQ</param>
+        /// <param name="errorMessage"></param>
+        /// <returns></returns>
+        private bool OpenRabbitQueue(string queueName, int maxnumberofMessages, RabbitMQParameters parameters, int messageTTL = 1209600000)
+        {
+            bool result = false;
+            if (parameters != null)
+            {
+                RabbitHost = parameters.RabbitMQHost;
+                RabbitBatchValue = Convert.ToUInt16(maxnumberofMessages);
+                RabbitQueueName = queueName;
+
+                ConnectionFactory factory = new ConnectionFactory();
+                factory.HostName = RabbitHost;
+                factory.UserName = parameters.UserName;
+                factory.Password = parameters.Password;
+
+                RabbitConnection = factory.CreateConnection();
+                RabbitChannel = RabbitConnection.CreateModel();
+
+                Dictionary<string, object> args = new Dictionary<string, object>();
+                args.Add("x-message-ttl", messageTTL);
+
+                try
+                {
+                    if (!String.IsNullOrWhiteSpace(RabbitQueueName))
+                    {
+                        // Check queue exists
+                        QueueDeclareOk resultado = RabbitChannel.QueueDeclarePassive(queueName);
+                        result = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Queue not found");
+                    RabbitDispose();
+                }
+            }
+
+            return result;
+        }
 
         /// <summary>
         /// Get number of messages from RabbitMQ
@@ -1007,12 +1039,13 @@ namespace AWSHelpers
         private List<Message> RabbitGetMessages()
         {
             uint messageCount = RabbitChannel.MessageCount(RabbitQueueName);
-            if (RabbitBatchValue > messageCount)
+            uint batchvalue = RabbitBatchValue;
+            if (batchvalue > messageCount)
             {
-                RabbitBatchValue = messageCount;
+                batchvalue = messageCount;
             }
 
-            RabbitChannel.BasicQos(0, Convert.ToUInt16(RabbitBatchValue), false);
+            RabbitChannel.BasicQos(0, Convert.ToUInt16(batchvalue), false);
 
             ManualResetEvent waitEvent = new ManualResetEvent(false);
 
@@ -1040,8 +1073,8 @@ namespace AWSHelpers
 
                 messages.Add(messageobj);
                 count++;
-                
-                if(count % RabbitBatchValue == 0)
+
+                if (count % batchvalue == 0)
                 {
                     waitEvent.Set();
                 }
@@ -1054,7 +1087,6 @@ namespace AWSHelpers
                 waitEvent.WaitOne();
                 
                 RabbitChannel.BasicCancel(consumerTag);
-                return messages;
             }
             return messages;
         }
@@ -1062,7 +1094,7 @@ namespace AWSHelpers
         /// <summary>
         /// Finish RabbitMQ connection to close program execution
         /// </summary>
-        public void RabbitDispose()
+        private void RabbitDispose()
         {
             RabbitChannel.Dispose();
             RabbitConnection.Dispose();
