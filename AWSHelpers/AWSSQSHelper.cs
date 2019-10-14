@@ -235,7 +235,7 @@ namespace AWSHelpers
         /// <summary>
         /// The method opens the queue
         /// </summary>
-        public bool OpenQueue(string queuename, int maxnumberofmessages, RegionEndpoint regionendpoint,String AWSAccessKey="", String AWSSecretKey="", bool useRabbitMQ = false, RabbitMQParameters rabbitParameters = null)
+        public bool OpenQueue(string queuename, int maxnumberofmessages, RegionEndpoint regionendpoint, String AWSAccessKey="", String AWSSecretKey="", bool useRabbitMQ = false, RabbitMQParameters rabbitParameters = null)
         {
             ClearErrorInfo();
 
@@ -763,46 +763,38 @@ namespace AWSHelpers
         /// </summary>
         public void ClearQueue ()
         {
-
-            if (UseRabbitMQ)
+            // TODO: We must alter the code to check how many messages are left in the queue. If there are too many messages, we should destroy the queue, wait one minute, and create it again.
+            do
             {
-                RabbitClearQueue();
-            }
-            else
-            {
-                // TODO: We must alter the code to check how many messages are left in the queue. If there are too many messages, we should destroy the queue, wait one minute, and create it again.
-                do
+                // Dequeueing Messages
+                if (!DeQueueMessages ())
                 {
-                    // Dequeueing Messages
-                    if (!DeQueueMessages ())
+                    // Checking for the need to abort (queue error)
+                    if (!String.IsNullOrWhiteSpace (ErrorMessage))
                     {
-                        // Checking for the need to abort (queue error)
-                        if (!String.IsNullOrWhiteSpace (ErrorMessage))
-                        {
-                            return; // Abort
-                        }
-
-                        continue; // Continue in case de dequeue fails, to make sure no message will be kept in the queue
+                        return; // Abort
                     }
 
-                    // Retrieving Message Results
-                    var resultMessages = rcvMessageResponse.Messages;
+                    continue; // Continue in case de dequeue fails, to make sure no message will be kept in the queue
+                }
 
-                    // Checking for no message dequeued
-                    if (resultMessages.Count == 0)
-                    {
-                        break; // Breaks loop
-                    }
+                // Retrieving Message Results
+                var resultMessages = rcvMessageResponse.Messages;
 
-                    // Iterating over messages of the result to remove it
-                    foreach (Message message in resultMessages)
-                    {
-                        // Deleting Message from Queue
-                        DeleteMessage (message);
-                    }
+                // Checking for no message dequeued
+                if (resultMessages.Count == 0)
+                {
+                    break; // Breaks loop
+                }
 
-                } while (true);
-            }
+                // Iterating over messages of the result to remove it
+                foreach (Message message in resultMessages)
+                {
+                    // Deleting Message from Queue
+                    DeleteMessage (message);
+                }
+
+            } while (true);
         }
 
         /// <summary>
@@ -855,7 +847,7 @@ namespace AWSHelpers
             queue.PurgeQueue (new PurgeQueueRequest
             {
                 QueueUrl = queueurl.QueueUrl
-            });
+            });            
         }
 
         ///////////////////////////////////////////////////////////////////////
@@ -901,7 +893,7 @@ namespace AWSHelpers
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("Queue not found");
+                    ErrorMessage = "Queue not found";
                     RabbitDispose();
                 }
             }
@@ -1022,14 +1014,6 @@ namespace AWSHelpers
             }
             
             return result;
-        }
-
-        /// <summary>
-        /// This method repeatedly dequeues messages until there are no messages left
-        /// </summary>
-        private void RabbitClearQueue()
-        {
-            RabbitChannel.QueuePurge(RabbitQueueName);     
         }
 
         /// <summary>
