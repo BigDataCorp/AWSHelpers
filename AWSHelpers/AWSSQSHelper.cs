@@ -59,6 +59,7 @@ namespace AWSHelpers
         private static IConnection RabbitConnection;
         private static IModel RabbitChannel;
         private bool UseRabbitMQ;
+        private bool PersistMessage;
 
 
         ///////////////////////////////////////////////////////////////////////
@@ -867,6 +868,8 @@ namespace AWSHelpers
             bool result = false;
             if (parameters != null)
             {
+                PersistMessage = parameters.Persistent;
+
                 RabbitHost = parameters.RabbitMQHost;
                 RabbitBatchValue = Convert.ToUInt16(maxnumberofMessages);
                 RabbitQueueName = queueName;
@@ -893,7 +896,7 @@ namespace AWSHelpers
                 }
                 catch (Exception ex)
                 {
-                    ErrorMessage = "Queue not found";
+                    ErrorMessage = "Queue not found." + ex.Message;
                     RabbitDispose();
                 }
             }
@@ -921,12 +924,15 @@ namespace AWSHelpers
         {
             bool result = false;
             byte[] body;
-
+            
+            IBasicProperties properties = RabbitChannel.CreateBasicProperties();
+            properties.Persistent = PersistMessage;
+           
             try
             {
                 body = Encoding.UTF8.GetBytes(msgbody);
 
-                RabbitChannel.BasicPublish(exchange: "", routingKey: RabbitQueueName, basicProperties: null, body: body);
+                RabbitChannel.BasicPublish(exchange: "", routingKey: RabbitQueueName, basicProperties: properties, body: body);
                 
                 result = true;
             }
@@ -946,13 +952,16 @@ namespace AWSHelpers
             bool result = false;
             byte[] body;
 
+            IBasicProperties properties = RabbitChannel.CreateBasicProperties();
+            properties.Persistent = PersistMessage;
+
             try
             {
                 foreach (string message in messages)
                 {
                     body = Encoding.UTF8.GetBytes(message);
 
-                    RabbitChannel.BasicPublish(exchange: "", routingKey: RabbitQueueName, basicProperties: null, body: body);
+                    RabbitChannel.BasicPublish(exchange: "", routingKey: RabbitQueueName, basicProperties: properties, body: body);
                 }
                 result = true;
             }
