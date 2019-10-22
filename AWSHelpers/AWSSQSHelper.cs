@@ -19,6 +19,7 @@ using Amazon.SQS.Model;
 using RabbitMQ.Client;
 using System.Text;
 using RabbitMQ.Client.Events;
+using System.Globalization;
 
 
 namespace AWSHelpers
@@ -48,11 +49,15 @@ namespace AWSHelpers
         public const int AmazonSQSMaxMessageSize = 256 * 1024;                  // AMAZON queue max message size
 
         public string AWSAccessKey;                         
-        public string AWSSecretKey;  
-        
+        public string AWSSecretKey;
+
+        private readonly string DateFormat = "yyyy-MM-dd'T'HH:mm:ss.fffK";
         // RabbitMQ fields
         private string RabbitHost;
         private string RabbitQueueName;
+        
+        private string RabbitUserName;
+        private string RabbitPassword;
 
         private uint RabbitBatchValue;
         
@@ -357,10 +362,22 @@ namespace AWSHelpers
             ClearErrorInfo();
 
             bool result = false;
+
             try
             {
-                rcvMessageResponse = queue.ReceiveMessage(rcvMessageRequest);
+                if(UseRabbitMQ)
+                {
+                    List<Message> messages = RabbitGetMessages();
+                    rcvMessageResponse = new ReceiveMessageResponse();
+                    rcvMessageResponse.Messages = messages;
+                }
+                else
+                {
+                    rcvMessageResponse = queue.ReceiveMessage(rcvMessageRequest);
+                }
+
                 result = true;
+                
             }
             catch (Exception ex)
             {
@@ -874,6 +891,9 @@ namespace AWSHelpers
                 RabbitBatchValue = Convert.ToUInt16(maxnumberofMessages);
                 RabbitQueueName = queueName;
 
+                RabbitUserName = parameters.UserName;
+                RabbitPassword = parameters.Password;
+
                 ConnectionFactory factory = new ConnectionFactory();
                 factory.HostName = RabbitHost;
                 factory.UserName = parameters.UserName;
@@ -896,7 +916,8 @@ namespace AWSHelpers
                 }
                 catch (Exception ex)
                 {
-                    ErrorMessage = "Queue not found." + ex.Message;
+                    ErrorCode = e_Exception;
+                    ErrorMessage = "Queue '" + RabbitQueueName + "' not found::" + ex.Message;
                     RabbitDispose();
                 }
             }
@@ -910,19 +931,30 @@ namespace AWSHelpers
         /// <returns></returns>
         private int RabbitNumberOfMessages()
         {
-            long totalMessages = 0;
+            int result = 0;
+            ClearErrorInfo();
 
-            totalMessages = RabbitChannel.MessageCount(RabbitQueueName);
-
-            return Convert.ToInt32(totalMessages);
+            try
+            {
+                long totalMessages = RabbitChannel.MessageCount(RabbitQueueName);
+                return Convert.ToInt32(totalMessages);
+            }
+            catch(Exception ex)
+            {
+                ErrorCode = e_Exception;
+                ErrorMessage = ex.Message;
+            }
+            return result;
         } 
 
         /// <summary>
-        /// Insert a message in the RabbitMQ queue
+        /// Inserts a message in the queue
         /// </summary>
         private bool RabbitEnqueueMessage(string msgbody)
         {
             bool result = false;
+            ClearErrorInfo();
+
             byte[] body;
             
             IBasicProperties properties = RabbitChannel.CreateBasicProperties();
@@ -931,13 +963,12 @@ namespace AWSHelpers
             try
             {
                 body = Encoding.UTF8.GetBytes(msgbody);
-
                 RabbitChannel.BasicPublish(exchange: "", routingKey: RabbitQueueName, basicProperties: properties, body: body);
-                
                 result = true;
             }
             catch (Exception ex)
             {
+                ErrorCode = e_Exception;
                 ErrorMessage = ex.Message;
             }
 
@@ -967,6 +998,7 @@ namespace AWSHelpers
             }
             catch(Exception ex)
             {
+                ErrorCode = e_Exception;
                 ErrorMessage = ex.Message;
             }
             
@@ -974,13 +1006,14 @@ namespace AWSHelpers
         }
 
         /// <summary>
-        /// Delete one message from RabbitMQ
+        /// Deletes a single message from the queue
         /// </summary>
         /// <param name="message"></param>
         /// <returns></returns>
         private bool RabbitDeleteMessage(Message message)
         {
             bool result = false;
+            ClearErrorInfo();
 
             ulong messageTag = Convert.ToUInt64(message.MessageId);
 
@@ -991,6 +1024,7 @@ namespace AWSHelpers
             }
             catch(Exception ex)
             {
+                ErrorCode = e_Exception;
                 ErrorMessage = ex.Message;
             }
             
@@ -998,13 +1032,15 @@ namespace AWSHelpers
         }
 
         /// <summary>
-        /// Delete messages from RabbitMQ
+        /// Deletes multiple messages from the queue at once
         /// </summary>
         /// <param name="messages"></param>
         /// <returns></returns>
         private bool RabbitDeleteMessages(IList<Message> messages)
         {
             bool result = false;
+            ClearErrorInfo();
+
             ulong messageTag;
 
             try
@@ -1019,6 +1055,7 @@ namespace AWSHelpers
             }
             catch (Exception ex)
             {
+                ErrorCode = e_Exception;
                 ErrorMessage = ex.Message;
             }
             
@@ -1031,11 +1068,20 @@ namespace AWSHelpers
         /// <returns></returns>
         private List<Message> RabbitGetMessages()
         {
+            // Init result
+            List<Message> messages = new List<Message>();
+
+            // Set the number of messages that will be loaded
             uint messageCount = RabbitChannel.MessageCount(RabbitQueueName);
             uint batchvalue = RabbitBatchValue;
             if (batchvalue > messageCount)
             {
                 batchvalue = messageCount;
+            }
+
+            if(batchvalue == 0)
+            {
+                return messages;
             }
 
             RabbitChannel.BasicQos(0, Convert.ToUInt16(batchvalue), false);
@@ -1044,9 +1090,7 @@ namespace AWSHelpers
 
             EventingBasicConsumer consumer = new EventingBasicConsumer(RabbitChannel);
 
-            List<Message> messages = new List<Message>();
-            Message messageobj;
-
+            Message message;
             byte[] body;
 
             long timestamp;
@@ -1055,16 +1099,20 @@ namespace AWSHelpers
 
             consumer.Received += (sender, eventArgs) =>
             {
-                messageobj = new Message();
+                message = new Message();
 
                 body = eventArgs.Body;
                 timestamp = eventArgs.BasicProperties.Timestamp.UnixTime;
 
-                messageobj.Body = Encoding.UTF8.GetString(body);
-                messageobj.Attributes.Add("timestamp", timestamp.ToString());
-                messageobj.MessageId = eventArgs.DeliveryTag.ToString();
+                message.Body = Encoding.UTF8.GetString(body);
+                message.Attributes.Add("timestamp", timestamp.ToString());
+                message.MessageId = eventArgs.DeliveryTag.ToString();
+                message.ReceiptHandle = message.MessageId;
 
-                messages.Add(messageobj);
+                message.Attributes.Add("QueueUrl", String.Format("{0}.{1}", RabbitHost, RabbitQueueName));
+                message.Attributes.Add("Timestamp", UnixTimeStampToDateTime(timestamp).ToString(DateFormat, DateTimeFormatInfo.InvariantInfo));
+
+                messages.Add(message);
                 count++;
 
                 if (count % batchvalue == 0)
@@ -1091,6 +1139,13 @@ namespace AWSHelpers
         {
             RabbitChannel.Dispose();
             RabbitConnection.Dispose();
+        }
+
+        private DateTime UnixTimeStampToDateTime(double unixTimestamp)
+        {
+            DateTime date = new DateTime(1970,1,1,0,0,0,0,System.DateTimeKind.Utc);
+            date = date.AddSeconds(unixTimestamp);
+            return date;
         }
     }
 }
