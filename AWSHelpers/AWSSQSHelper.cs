@@ -899,7 +899,7 @@ namespace AWSHelpers
                 factory.UserName = parameters.UserName;
                 factory.Password = parameters.Password;
 
-                RabbitConnection = factory.CreateConnection();
+                RabbitConnection = factory.CreateConnection(parameters.ConnectionName);
                 RabbitChannel = RabbitConnection.CreateModel();
 
                 Dictionary<string, object> args = new Dictionary<string, object>();
