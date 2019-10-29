@@ -496,7 +496,7 @@ namespace AWSHelpers
         /// <summary>
         /// Uploads a file to S3. This method uses the "TransferUtility" class in order to upload the file.
         /// </summary>
-        public bool FileUpload(string bucketname, string dataname, string filepath, S3StorageClass storageClass)
+        public bool FileUpload(string bucketname, string dataname, string filepath, S3StorageClass storageClass, S3CannedACL s3CannedACL)
         {
             // Reset error info
             ClearErrorInfo();
@@ -512,7 +512,7 @@ namespace AWSHelpers
                     PartSize        = 6291456, // 6 MB.
                     Key             = dataname,
                     ContentType     = "binary/octet-stream",
-                    CannedACL       = S3CannedACL.PublicReadWrite
+                    CannedACL       = s3CannedACL
                 };
                 fileTransferUtility.Upload(fileTransferUtilityRequest);
             }
@@ -526,11 +526,27 @@ namespace AWSHelpers
         }
 
         /// <summary>
+        /// Uploads a file to S3. This method uses the "TransferUtility" class in order to upload the file.
+        /// </summary>
+        public bool FileUpload(string bucketname, string dataname, string filepath, S3CannedACL s3CannedACL)
+        {
+            return FileUpload(bucketname, dataname, filepath, S3StorageClass.ReducedRedundancy, s3CannedACL);
+        }
+
+        /// <summary>
+        /// Uploads a file to S3. This method uses the "TransferUtility" class in order to upload the file.
+        /// </summary>
+        public bool FileUpload(string bucketname, string dataname, string filepath, S3StorageClass storageClass)
+        {
+            return FileUpload(bucketname, dataname, filepath, storageClass, S3CannedACL.PublicReadWrite);
+        }
+
+        /// <summary>
         /// Uploads a file to S3 with 'Reduced Redundancy' storage class.
         /// </summary>
         public bool FileUpload(string bucketname, string dataname, string filepath)
         {
-            return FileUpload(bucketname, dataname, filepath, S3StorageClass.ReducedRedundancy);
+            return FileUpload(bucketname, dataname, filepath, S3StorageClass.ReducedRedundancy, S3CannedACL.PublicReadWrite);
         }
 
         /// <summary>
